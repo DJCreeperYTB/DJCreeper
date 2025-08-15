@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DJCreeper — Don</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container nav">
+      <div class="brand">
+        <a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a>
+        <div class="brand-title">DJCreeper</div>
+      </div>
+      <button class="menu-btn" aria-label="Menu">☰ Menu</button>
+      <nav class="navlinks">
+        <a href="index.html">Accueil</a>
+        <a href="wiki.html">Wiki</a>
+        <a href="reglement.html">Règlement</a>
+        <a href="team.html">Team Creeper</a>
+        <a href="events.html">Événement</a>
+        <a href="shop.html">Shop</a>
+        <a href="dons.html">Don</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1>Faire un don</h1>
+    <p class="muted">Merci pour le soutien. Chaque don aide à financer la musique, les projets et la communauté.</p>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Passer par PayPal</h3>
+        <p><a class="btn" href="https://paypal.me/djcreeperytb" target="_blank" rel="noopener">Ouvrir PayPal</a></p>
+        <div class="alert">Seuls les dons à chiffre rond sont pris en compte (ex : 1€, 5€, 10€).</div>
+      </div>
+
+      <div class="card">
+        <h3>Historique des dons</h3>
+        <table class="table">
+          <thead>
+            <tr><th>Donateur</th><th>Date</th><th>Montant</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>dayeetdude</td><td>7 septembre 2024</td><td>5€</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Historique des boosters</h3>
+        <table class="table">
+          <thead>
+            <tr><th>Pseudo</th><th>Date</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>DJCreeper</td><td>17 novembre 2024</td></tr>
+            <tr><td>DJCreeper</td><td>18 novembre 2024</td></tr>
+            <tr><td>Cr4c0t</td><td>9 juin 2025</td></tr>
+            <tr><td>Cr4c0t</td><td>14 juin 2025</td></tr>
+          </tbody>
+        </table>
+        <p><strong>Nombre de boosts actuels :</strong> 2</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container cols">
+      <div>
+        <strong>DJCreeper</strong>
+        <small>© <span id="year"></span></small>
+      </div>
+    </div>
+  </footer>
+<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+</body>
+</html>
