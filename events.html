@@ -6,6 +6,17 @@
 <title>DJCreeper — Événement</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
+<style>
+  .event-hero img { max-width: 180px; margin: 0 auto 18px; display: block; }
+  .progress-wrap { background:#192634; border:1px solid #2c3a4b; border-radius:12px; overflow:hidden; margin:16px 0; }
+  .progress-bar { width:0%; height:18px; background:linear-gradient(90deg,#34d399,#22c55e); transition: width 1.8s ease-out; }
+  .tiers { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+  .tiers li { background:#0f172a; border:1px solid #1e2f4a; border-radius:10px; padding:10px; }
+  .tiers strong { color:#34d399; }
+  .rewards li { background:#0f172a; border:1px solid #1e2f4a; border-radius:10px; padding:10px; }
+  .sponsor { display:flex; align-items:center; gap:12px; margin-top:18px; }
+  .sponsor img { max-width:160px; height:auto; }
+</style>
 </head>
 <body>
   <header class="header">
@@ -28,14 +39,51 @@
   </header>
 
   <main class="container">
-    <h1>Événement en cours</h1>
-    <p class="muted">Toutes les infos, règles et récompenses.</p>
+    <h1>Creeper Games 2</h1>
+    <p class="muted">En cours de préparation</p>
 
-    <div class="grid grid-2">
-      <div class="card">
-        <h3>Aucun événement en cours</h3>
-        <p>Il n'y a actuellement aucun événement prévu. Restez connecté pour les prochaines annonces !</p>
-      </div>
+    <div class="grid grid-1">
+      <article class="card event-hero">
+        <img src="./assets/Logo Creeper Games 2.png" alt="Logo Creeper Games 2">
+        <h3>Objectifs de financement</h3>
+        <!-- ICI POUR MODIF LE % -->
+        <div class="progress-wrap" aria-label="Progression des objectifs" data-current="0" data-goal="200">
+          <div class="progress-bar"></div>
+        </div>
+        <p class="progress-label">0€ / 200€</p>
+        <ul class="tiers">
+          <li><strong>20€</strong> → Organisation du tournoi</li>
+          <li><strong>30€</strong> → Vêtements Creeper Games 2</li>
+          <li><strong>40€</strong> → Vêtements Creeper Games 1</li>
+          <li><strong>50€</strong> → Vidéo montée par un vrai monteur</li>
+          <li><strong>70€</strong> → Manger un poulet en live 🍗</li>
+          <li><strong>100€</strong> → Médaille pour le vainqueur</li>
+          <li><strong>150€</strong> → Trophée (remplace la médaille) 🏆</li>
+          <li><strong>200€</strong> → Face Reveal 😳</li>
+        </ul>
+        <p>Pour contribuer au projet, vous pouvez participer par <a href="#" title="Kickstarter bientôt disponible">Kickstarter (bientôt disponible)</a>, <a href="#" title="PayPal">PayPal</a> ou en donation physique.</p>
+        <p>Formulaire d'inscription : <a href="#" title="Formulaire d'inscription bientôt disponible">bientôt disponible</a></p>
+        <div class="sponsor">
+          <span>Projet sponsorisé par :</span>
+          <img src="./assets/Echo Host.png" alt="Logo Echo Host">
+        </div>
+      </article>
+
+      <article class="card">
+        <h3>🎁 Les récompenses</h3>
+        <p>Pour remercier les soutiens :</p>
+        <ul class="rewards">
+          <li><strong>1€</strong> → Rôle 💰Soutiens</li>
+          <li><strong>2€</strong> → +1000 Creeper Coins</li>
+          <li><strong>5€</strong> → + rôle ❤️Mini Creeper</li>
+          <li><strong>10€</strong> → + rôle 🌟VIP</li>
+          <li><strong>20€</strong> → + rôle custom</li>
+          <li><strong>30€</strong> → + dédicace vidéo</li>
+          <li><strong>50€</strong> → + proposer une épreuve (tirage au sort)</li>
+          <li><strong>75€</strong> → + proposer deux épreuves (tirage au sort)</li>
+          <li><strong>100€</strong> → + choisir une épreuve intégrée aux Creeper Games</li>
+        </ul>
+      </article>
     </div>
   </main>
 
@@ -48,6 +96,18 @@
     </div>
   </footer>
 <script src="js/script.js"></script>
-<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+  const wrap = document.querySelector('.progress-wrap');
+  if (wrap) {
+    const current = Number(wrap.dataset.current || 0);
+    const goal = Number(wrap.dataset.goal || 100);
+    const pct = Math.max(0, Math.min(100, Math.round((current / goal) * 100)));
+    const bar = wrap.querySelector('.progress-bar');
+    const label = document.querySelector('.progress-label');
+    if (bar) { bar.style.width = pct + '%'; }
+    if (label) { label.textContent = `${current}€ / ${goal}€ (${pct}%)`; }
+  }
+</script>
 </body>
 </html>
