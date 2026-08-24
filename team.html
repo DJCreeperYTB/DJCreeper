@@ -1,7 +1,8 @@
+<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DJCreeper — Team Creeper</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
@@ -9,79 +10,32 @@
 <body>
   <header class="header">
     <div class="container nav">
-      <div class="brand">
-        <a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a>
-        <div class="brand-title">DJCreeper</div>
-      </div>
-      <button class="menu-btn" aria-label="Menu">☰ Menu</button>
-      <nav class="navlinks">
-        <a href="index.html">Accueil</a>
-        <a href="wiki.html">Wiki</a>
-        <a href="reglement.html">Règlement</a>
-        <a href="team.html">Team Creeper</a>
-        <a href="events.html">Événement</a>
-        <a href="shop.html">Shop</a>
-        <a href="dons.html">Don</a>
+      <div class="brand"><a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a><div class="brand-title">DJCreeper</div></div>
+      <button class="menu-btn" type="button" aria-label="Ouvrir le menu" aria-expanded="false">☰ Menu</button>
+      <nav class="navlinks" aria-label="Navigation principale">
+        <a href="index.html">Accueil</a><a href="wiki.html">Wiki</a><a href="portfolio.html">Portfolio</a><a href="reglement.html">Règlement</a><a href="team.html">Team Creeper</a><a href="events.html">Événements</a><a href="shop.html">Shop</a><a href="dons.html">Don</a>
       </nav>
     </div>
   </header>
 
   <main class="container">
+    <p class="eyebrow">Les personnes derrière la Safe Zone</p>
     <h1>Team Creeper</h1>
-    <p class="muted">Modérateurs, monteurs, miniamakers et plus.</p>
+    <p class="muted">Modération, création, idées et soutien : voici les rôles qui font avancer la communauté.</p>
     <div class="space-lg"></div>
 
     <section class="grid grid-3">
-      <div class="card">
-        <h3>Administrateur</h3>
-        <ul>
-          <li>Cr4c0t</li>
-          <li>DJCreeper</li>
-        </ul>
-      </div>
-        <div class="card">
-        <h3>Modérateurs</h3>
-        <ul>
-          <li>Noé</li>
-          <li>Kitsuwen</li>
-        </ul>
-      </div>
-        <div class="card">
-        <h3>Helper</h3>
-        <ul>
-          <li>Scratcher42</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>Monteur</h3>
-        <ul>
-          <li>DJCreeper</li>
-          <li>Cryoxx ?</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>Miniamakers</h3>
-        <ul>
-          <li>Tom_16</li>
-          <li>LostGuppy</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>Remerciements</h3>
-        <p>Merci aux anciens monteurs, miniamakers et modérateur !</p>
-      </div>
+      <article class="card"><p class="card-kicker">Direction</p><h3>Administrateurs</h3><ul><li>Cr4c0t</li><li>DJCreeper</li></ul></article>
+      <article class="card"><p class="card-kicker">Garde-fous</p><h3>Modérateurs</h3><ul><li>Noé</li><li>Kitsuwen</li><li>Herocreeper</li></ul></article>
+      <article class="card"><p class="card-kicker">Accueil</p><h3>Helper</h3><ul><li>ツ</li></ul></article>
+      <article class="card"><p class="card-kicker">Post-production</p><h3>Monteur</h3><ul><li>DJCreeper</li><li>Zylosh</li></ul></article>
+      <article class="card"><p class="card-kicker">Direction artistique</p><h3>Miniamakers</h3><ul><li>Tom_16</li><li>LostGuppy</li></ul></article>
+      <article class="card"><p class="card-kicker">Merci</p><h3>Remerciements</h3><p>Merci aux anciens monteurs, miniamakers et modérateurs qui ont contribué à l’histoire de DJCreeper.</p></article>
     </section>
   </main>
 
-  <footer class="footer">
-    <div class="container cols">
-      <div>
-        <strong>DJCreeper</strong>
-        <small>© <span id="year"></span></small>
-      </div>
-    </div>
-  </footer>
-<script src="js/script.js"></script>
-<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+  <footer class="footer"><div class="container cols"><div><strong>DJCreeper</strong><small>© <span id="year"></span> — Tous droits réservés</small></div><div><small><a href="index.html">Accueil</a></small></div><div><small><a href="wiki.html">Parcours</a></small></div></div></footer>
+  <script src="js/script.js"></script>
+  <script>document.getElementById('year').textContent = new Date().getFullYear()</script>
 </body>
 </html>

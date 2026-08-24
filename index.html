@@ -2,7 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="DJCreeper : vidéos, lives, musique et actualités de la communauté Safe Zone.">
 <title>DJCreeper — Accueil</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
@@ -14,13 +15,14 @@
         <a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a>
         <div class="brand-title">DJCreeper</div>
       </div>
-      <button class="menu-btn" aria-label="Menu">☰ Menu</button>
-      <nav class="navlinks">
+      <button class="menu-btn" type="button" aria-label="Ouvrir le menu" aria-expanded="false">☰ Menu</button>
+      <nav class="navlinks" aria-label="Navigation principale">
         <a href="index.html">Accueil</a>
         <a href="wiki.html">Wiki</a>
+        <a href="portfolio.html">Portfolio</a>
         <a href="reglement.html">Règlement</a>
         <a href="team.html">Team Creeper</a>
-        <a href="events.html">Événement</a>
+        <a href="events.html">Événements</a>
         <a href="shop.html">Shop</a>
         <a href="dons.html">Don</a>
       </nav>
@@ -30,82 +32,98 @@
   <main class="container">
     <section class="hero">
       <div class="hero-card">
-        <div class="pill"><span class="dot"></span> Bienvenue sur mon site</div>
-        <h1>Bienvenue dans mon univers !</h1>
-        <p>Je suis DJCreeper, artiste et créateur de contenu. Ici tu trouveras mes réseaux, mes règles, ma team, les événements en cours, un shop et un espace pour soutenir mes projets.</p>
+        <div class="pill"><span class="dot"></span> Bienvenue dans la Safe Zone</div>
+        <h1>Un univers créatif, <span>sans mode pause.</span></h1>
+        <p>Je suis DJCreeper : vidéaste, streameur et artiste musical. Retrouve ici mes contenus, mes sorties, mon parcours et les projets qui font vivre la communauté.</p>
         <div class="cta">
-          <a class="btn" href="dons.html">Soutenir maintenant</a>
-          <a class="btn secondary" href="wiki.html">En savoir plus</a>
+          <a class="btn" href="#videos">Découvrir les nouveautés</a>
+          <a class="btn secondary" href="wiki.html">Voir le parcours</a>
           <a class="btn ghost" href="#reseaux">Mes réseaux</a>
         </div>
         <div class="badges">
-          <div class="badge">Artiste certifié</div>
-          <div class="badge">Communauté bienveillante</div>
-          <div class="badge">Projets ouverts</div>
+          <span class="badge">Vidéos &amp; lives</span>
+          <span class="badge">Musique originale</span>
+          <span class="badge">Communauté bienveillante</span>
         </div>
       </div>
-      <div class="grid grid-2">
-        <div class="card">
-          <h3>Événement en cours</h3>
-          <p class="muted">Rejoins-nous pour participer et gagner des récompenses.</p>
-          <div class="space"></div>
-          <a class="btn" href="events.html">Voir l’événement</a>
+
+      <div class="hero-aside">
+        <div class="signal-card">
+          <span class="signal-label">Signal du moment</span>
+          <h3>Aucun événement en cours.</h3>
+          <p>L’agenda est calme : les prochains rendez-vous seront annoncés ici dès qu’ils seront confirmés.</p>
         </div>
-        <div class="card">
-          <h3>Shop</h3>
-          <p class="muted">Nouveaux tee-shirts disponibles.</p>
-          <div class="space"></div>
-          <a class="btn" href="shop.html">Accéder au shop</a>
+        <div class="card home-quick-actions">
+          <p class="card-kicker cyan">À explorer</p>
+          <h3>Les projets et les rendez-vous</h3>
+          <p>Retrouve mes créations et les prochains événements de la communauté.</p>
+          <div class="cta">
+            <a class="btn secondary" href="events.html">Événements</a>
+            <a class="btn ghost" href="portfolio.html">Portfolio</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <section id="videos" class="grid grid-3">
-      <div class="card video-card">
-        <h3>Dernière vidéo</h3>
-        <p class="muted">La dernière vidéo uploadée sur la chaîne.</p>
-        <div class="space"></div>
-        <div class="video-frame">
-          <iframe src="https://www.youtube.com/embed/_8Q7gNP6qBo" title="Dernière vidéo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    <section id="videos" class="section-block">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Le signal en temps réel</p>
+          <h2>Les dernières sorties</h2>
         </div>
-        <a class="btn" href="https://www.youtube.com/watch?v=_8Q7gNP6qBo" target="_blank" rel="noopener">Ouvrir sur YouTube</a>
+        <span id="content-sync" class="sync-status" aria-live="polite">Synchronisation des chaînes…</span>
       </div>
 
-      <div class="card video-card">
-        <h3>Dernier live</h3>
-        <p class="muted">Le dernier direct diffusé.</p>
-        <div class="space"></div>
-        <div class="video-frame">
-          <iframe src="https://www.youtube.com/embed/vs9UWmIBZyM" title="Dernier live" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-        </div>
-        <a class="btn" href="https://www.youtube.com/watch?v=vs9UWmIBZyM" target="_blank" rel="noopener">Ouvrir sur YouTube</a>
-      </div>
+      <div class="media-grid">
+        <article class="card media-card" data-feed-role="video" data-channel-id="UCWHkCLQgznePTlZxwkASnGw" data-feed-state="loading">
+          <a class="media-frame media-link" data-feed-link href="https://www.youtube.com/watch?v=_8Q7gNP6qBo" target="_blank" rel="noopener" aria-label="Ouvrir la dernière vidéo DJCreeper sur YouTube"><img data-feed-thumbnail src="https://i.ytimg.com/vi/_8Q7gNP6qBo/hqdefault.jpg" alt="Aperçu de la dernière vidéo DJCreeper" loading="lazy"><span class="play-mark" aria-hidden="true">▶</span></a>
+          <div class="media-body">
+            <div class="media-meta"><span class="media-tag">Vidéo</span><span data-feed-date>Dernière mise à jour</span></div>
+            <h3 data-feed-title>La dernière vidéo DJCreeper</h3>
+            <a class="btn secondary" data-feed-link href="https://www.youtube.com/watch?v=_8Q7gNP6qBo" target="_blank" rel="noopener">Ouvrir sur YouTube</a>
+          </div>
+        </article>
 
-      <div class="card video-card">
-        <h3>Dernière musique</h3>
-        <p class="muted">Dernière sortie musicale.</p>
-        <div class="space"></div>
-        <div class="video-frame">
-          <iframe src="https://www.youtube.com/embed/eW3Z3CTnYzY" title="Dernière musique" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-        </div>
-        <a class="btn" href="https://www.youtube.com/watch?v=eW3Z3CTnYzY" target="_blank" rel="noopener">Ouvrir sur YouTube</a>
+        <article class="card media-card" data-feed-role="live" data-channel-id="UCWHkCLQgznePTlZxwkASnGw" data-feed-state="loading">
+          <a class="media-frame media-link" data-feed-link href="https://www.youtube.com/watch?v=vs9UWmIBZyM" target="_blank" rel="noopener" aria-label="Ouvrir le dernier live DJCreeper sur YouTube"><img data-feed-thumbnail src="https://i.ytimg.com/vi/vs9UWmIBZyM/hqdefault.jpg" alt="Aperçu du dernier live DJCreeper" loading="lazy"><span class="play-mark" aria-hidden="true">▶</span></a>
+          <div class="media-body">
+            <div class="media-meta"><span class="media-tag">Live</span><span data-feed-date>Dernière mise à jour</span></div>
+            <h3 data-feed-title>Le dernier live DJCreeper</h3>
+            <a class="btn secondary" data-feed-link href="https://www.youtube.com/watch?v=vs9UWmIBZyM" target="_blank" rel="noopener">Ouvrir sur YouTube</a>
+          </div>
+        </article>
+
+        <article class="card media-card" data-feed-role="music" data-channel-id="UCb25KcHfT249totZpGQ342A" data-feed-state="loading">
+          <a class="media-frame media-link" data-feed-link href="https://www.youtube.com/watch?v=eW3Z3CTnYzY" target="_blank" rel="noopener" aria-label="Écouter la dernière sortie musicale DJCreeper sur YouTube"><img data-feed-thumbnail src="https://i.ytimg.com/vi/eW3Z3CTnYzY/hqdefault.jpg" alt="Aperçu de la dernière sortie musicale DJCreeper" loading="lazy"><span class="play-mark" aria-hidden="true">▶</span></a>
+          <div class="media-body">
+            <div class="media-meta"><span class="media-tag">Musique</span><span data-feed-date>Dernière mise à jour</span></div>
+            <h3 data-feed-title>La dernière sortie musicale</h3>
+            <a class="btn secondary" data-feed-link href="https://www.youtube.com/watch?v=eW3Z3CTnYzY" target="_blank" rel="noopener">Écouter sur YouTube</a>
+          </div>
+        </article>
       </div>
     </section>
-    
-    <section id="reseaux" class="grid grid-3">
+
+    <section id="reseaux" class="grid home-network-grid section-block">
       <div class="card">
+        <p class="card-kicker">Connexion</p>
         <h3>Mes réseaux</h3>
-        <p class="muted">Tous les liens au même endroit.</p>
+        <p>Tous les liens au même endroit.</p>
         <div class="space"></div>
         <div class="kv">
-          <div>Discord</div><div><a href="https://discord.gg/uXshgywxYf" target="_blank" rel="noopener">Serveur Discord</a></div>
-          <div>YouTube</div><div><a href="https://youtube.com/@DJCreeperYTB" target="_blank" rel="noopener">DJCreeper</a></div>
+          <div>YouTube</div><div><a href="https://youtube.com/channel/UCWHkCLQgznePTlZxwkASnGw" target="_blank" rel="noopener">DJCreeper</a></div>
           <div>Twitch</div><div><a href="https://www.twitch.tv/djcreeperytb" target="_blank" rel="noopener">djcreeperytb</a></div>
           <div>TikTok</div><div><a href="https://www.tiktok.com/@djcreeperytb" target="_blank" rel="noopener">djcreeperytb</a></div>
+          <div>Mon serveur Discord</div><div><a href="https://discord.gg/uXshgywxYf" target="_blank" rel="noopener">Serveur Discord</a></div>
           <div>WhatsApp</div><div><a href="https://whatsapp.com/channel/0029VaGb1G4CHDyqVI6FiP1i" target="_blank" rel="noopener">DJCreeper</a></div>
+          <div>Fiverr</div><div><a href="https://fr.fiverr.com/s/d0pP6mZ" target="_blank" rel="noopener">Profil Fiverr</a></div>
+          <div>Mon site WEB</div><div><a href="https://djcreeperytb.github.io/DJCreeper/index.html" target="_blank" rel="noopener">DJCreeper</a></div>
+          <div>Mon profil Leboncoin</div><div><a href="https://leboncoin.fr/profil/a16769c1-5639-48ff-ac0a-ca96af4fb7f0/offres" target="_blank" rel="noopener">Profil Leboncoin</a></div>
+          <div>Mes vêtements</div><div><a href="https://djcreeper.creator-spring.com/" target="_blank" rel="noopener">Boutique DJCreeper</a></div>
           <div>PayPal</div><div><a href="https://paypal.me/djcreeperytb" target="_blank" rel="noopener">djcreeperytb</a></div>
+          <div>Kickstarter</div><div><a href="https://kickstarter.com/profile/djcreeperytb" target="_blank" rel="noopener">djcreeperytb</a></div>
           <div>GitHub</div><div><a href="https://github.com/DJCreeperYTB" target="_blank" rel="noopener">DJCreeperYTB</a></div>
-          <div>Reddit</div><div><a href="https://www.reddit.com/user/DJCreeperYTBOff" target="_blank" rel="noopener">DJCreeperYTBOff</a></div>
+          <div>Reddit</div><div><a href="https://www.reddit.com/r/DJCreeperYTB/" target="_blank" rel="noopener">r/DJCreeperYTB</a></div>
           <div>X</div><div><a href="https://x.com/DJCreeperYTB" target="_blank" rel="noopener">DJCreeperYTB</a></div>
           <div>Spotify</div><div><a href="https://open.spotify.com/intl-fr/artist/4cJNGWkJw2iy81WM92un0s?si=-WW8aH6ET4-GeikxdQHRRQ" target="_blank" rel="noopener">DJCreeper</a></div>
           <div>Deezer</div><div><a href="https://deezer.page.link/h3TTdbG7aE7AxuHBA" target="_blank" rel="noopener">DJCreeper</a></div>
@@ -118,38 +136,31 @@
         </div>
       </div>
       <div class="card">
+        <p class="card-kicker purple">Archives</p>
         <h3>Team Creeper</h3>
-        <p class="muted">Découvre les personnes qui rendent tout ça possible.</p>
+        <p>Découvre les personnes qui font vivre la modération, la création et la communauté.</p>
         <div class="space"></div>
         <a class="btn" href="team.html">Voir la team</a>
       </div>
       <div class="card">
-        <h3>Règlement</h3>
-        <p class="muted">Les règles pour garder une vibe saine.</p>
+        <p class="card-kicker cyan">Safe Zone</p>
+        <h3>Un espace clair</h3>
+        <p>Les règles et les infos importantes sont accessibles en quelques secondes.</p>
         <div class="space"></div>
-        <a class="btn" href="reglement.html">Lire</a>
+        <a class="btn secondary" href="reglement.html">Lire le règlement</a>
       </div>
     </section>
   </main>
 
   <footer class="footer">
     <div class="container cols">
-      <div>
-        <strong>DJCreeper</strong>
-        <small>© <span id="year"></span> — Tous droits réservés</small>
-      </div>
-      <div>
-        <small><a href="wiki.html">Wiki</a></small>
-        <small><a href="reglement.html">Règlement</a></small>
-      </div>
-      <div>
-        <small><a href="shop.html">Shop</a></small>
-        <small><a href="dons.html">Don</a></small>
-      </div>
+      <div><strong>DJCreeper</strong><small>© <span id="year"></span> — Tous droits réservés</small></div>
+      <div><small><a href="wiki.html">Wiki</a></small><small><a href="reglement.html">Règlement</a></small></div>
+      <div><small><a href="shop.html">Shop</a></small><small><a href="dons.html">Don</a></small></div>
     </div>
   </footer>
 
-<script src="js/script.js"></script>
-<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+  <script src="js/script.js"></script>
+  <script>document.getElementById('year').textContent = new Date().getFullYear()</script>
 </body>
 </html>

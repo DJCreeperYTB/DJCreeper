@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Portfolio de DJCreeper : jeux, applications, expériences web et créations musicales.">
+<title>DJCreeper — Portfolio</title>
+<link rel="icon" href="assets/logo.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container nav">
+      <div class="brand">
+        <a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a>
+        <div class="brand-title">DJCreeper</div>
+      </div>
+      <button class="menu-btn" type="button" aria-label="Ouvrir le menu" aria-expanded="false">☰ Menu</button>
+      <nav class="navlinks" aria-label="Navigation principale">
+        <a href="index.html">Accueil</a>
+        <a href="wiki.html">Wiki</a>
+        <a href="portfolio.html" aria-current="page">Portfolio</a>
+        <a href="reglement.html">Règlement</a>
+        <a href="team.html">Team Creeper</a>
+        <a href="events.html">Événements</a>
+        <a href="shop.html">Shop</a>
+        <a href="dons.html">Don</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="portfolio-hero">
+      <div class="hero-card portfolio-hero-copy">
+        <div class="pill"><span class="dot"></span> Portfolio · projets &amp; créations</div>
+        <h1>Des idées qui prennent forme, <span>du code au son.</span></h1>
+        <p>Je construis des expériences qui mélangent développement, narration et direction artistique : un jeu d’horreur, des applications utiles, des univers web et des morceaux à écouter.</p>
+        <div class="cta">
+          <a class="btn" href="#projets">Explorer les projets</a>
+          <a class="btn secondary" href="#musique">Voir la musique</a>
+        </div>
+        <div class="badges">
+          <span class="badge">4 projets mis en avant</span>
+          <span class="badge">Jeu · mobile · web</span>
+          <span class="badge">Musique originale &amp; remixes</span>
+        </div>
+      </div>
+
+      <aside class="portfolio-hero-aside" aria-label="Repères du portfolio">
+        <div class="portfolio-signal signal-card portfolio-contact-card">
+          <span class="signal-label">Travaillons ensemble</span>
+          <h3>Un projet en tête&nbsp;?</h3>
+          <p>Tu veux donner vie à une idée, améliorer une interface ou créer une expérience originale&nbsp;? Écris-moi directement.</p>
+          <div class="portfolio-contact-links">
+            <a class="contact-link" href="https://discord.com/channels/@me" target="_blank" rel="noopener">MP sur Discord&nbsp;: djcreeperytb</a>
+            <a class="contact-link" href="https://fr.fiverr.com/s/d0pP6mZ" target="_blank" rel="noopener">Voir mon profil Fiverr</a>
+          </div>
+        </div>
+        <div class="portfolio-index card">
+          <div class="portfolio-index-row"><span>01</span><strong>FRAME00</strong><small>jeu narratif</small></div>
+          <div class="portfolio-index-row"><span>02</span><strong>Miamigo</strong><small>app Android</small></div>
+          <div class="portfolio-index-row"><span>03</span><strong>Opaline</strong><small>univers web</small></div>
+          <div class="portfolio-index-row"><span>04</span><strong>YouBoost</strong><small>plateforme vidéo</small></div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="projets" class="section-block">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Projets sélectionnés</p>
+          <h2>Quatre façons de créer</h2>
+        </div>
+        <span class="sync-status is-ready">Archives personnelles · 2022—2026</span>
+      </div>
+
+      <div class="portfolio-grid">
+        <article class="card portfolio-project portfolio-project--feature">
+          <div class="portfolio-media">
+            <img src="assets/portfolio/frame00-hero.png" alt="Décor sombre du jeu FRAME00.exe" loading="lazy">
+            <span class="portfolio-number">01 / 04</span>
+          </div>
+          <div class="portfolio-project-body">
+            <div class="media-meta"><span class="media-tag">FRAME00.exe</span><span class="media-meta-right"><span class="media-type">Jeu Windows</span><span>Point-and-click · horreur analogique</span></span></div>
+            <h3>Une archive qui ne demande qu’à être ouverte.</h3>
+            <p>FRAME00.exe est un jeu d’horreur narratif autonome pour Windows. Le joueur explore des pièces inquiétantes, observe les détails, résout des énigmes et avance dans une histoire qui se révèle par fragments.</p>
+            <p>Le projet a été réalisé de bout en bout en C# avec .NET 8 et Windows Forms : scènes, états de jeu, interactions, changements d’ambiance et gestion audio sont réunis dans une expérience sans connexion internet.</p>
+            <div class="project-facts">
+              <span>C# / .NET 8</span><span>Windows x64</span><span>Sound design</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="card portfolio-project">
+          <div class="portfolio-media">
+            <img src="assets/portfolio/miamigo-hero.jpg" alt="Écran mobile de l’application Miamigo" loading="lazy">
+            <span class="portfolio-number">02 / 04</span>
+          </div>
+          <div class="portfolio-project-body">
+            <div class="media-meta"><span class="media-tag">Miamigo</span><span class="media-meta-right"><span class="media-type">Application mobile</span><span>Android natif</span></span></div>
+            <h3>Passer de l’idée du repas à une semaine organisée.</h3>
+            <p>Miamigo génère un menu personnalisé sur sept jours à partir du budget, du nombre de personnes, du régime, des allergies, des goûts et du temps disponible.</p>
+            <p>L’application s’appuie sur Gemini pour proposer les repas, puis garde localement le menu, les recettes et la liste de courses cochable. Elle permet aussi de partager une recette, d’importer celles reçues et d’exporter une semaine en PDF.</p>
+            <div class="project-facts">
+              <span>Java</span><span>Gemini API</span><span>SharedPreferences</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="card portfolio-project">
+          <div class="portfolio-media portfolio-media--video">
+            <video controls muted playsinline preload="metadata" poster="assets/portfolio/opaline-hero.png" aria-label="Démonstration vidéo du Jardin d’Opaline">
+              <source src="assets/portfolio/opaline-demo.mp4" type="video/mp4">
+              Votre navigateur ne peut pas lire cette vidéo.
+            </video>
+            <span class="portfolio-number">03 / 04</span>
+          </div>
+          <div class="portfolio-project-body">
+            <div class="media-meta"><span class="media-tag">Le Jardin d’Opaline</span><span class="media-meta-right"><span class="media-type">Expérience web</span><span>ARG · blog floral</span></span></div>
+            <h3>Créer un univers crédible jusque dans ses silences.</h3>
+            <p>Le Jardin d’Opaline est un faux blog floral conçu pour un ARG : articles, galerie, boutique, espace client et messagerie donnent l’impression d’un véritable atelier habité.</p>
+            <p>Le projet associe une direction artistique douce à une partie serveur complète : sessions privées, panel administrateur, Socket.IO pour le tchat temps réel et SQLite pour conserver les échanges.</p>
+            <div class="project-facts">
+              <span>Node.js</span><span>Socket.IO</span><span>SQLite</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="card portfolio-project portfolio-project--feature">
+          <div class="portfolio-media">
+            <img src="assets/portfolio/youboost-hero.png" alt="Page d’accueil de la plateforme YouBoost" loading="lazy">
+            <span class="portfolio-number">04 / 04</span>
+          </div>
+          <div class="portfolio-project-body">
+            <div class="media-meta"><span class="media-tag">YouBoost</span><span class="media-meta-right"><span class="media-type">Plateforme vidéo</span><span>Découverte de créateurs</span></span></div>
+            <h3>Donner une place aux chaînes qui commencent.</h3>
+            <p>YouBoost est une plateforme pensée pour aider les petits créateurs à être découverts. Les vidéos restent hébergées sur YouTube, tandis que YouBoost organise un catalogue, une recherche et un fil personnalisé.</p>
+            <p>Le prototype calcule les recommandations directement dans le navigateur selon les catégories regardées, les favoris, les mots-clés et la fraîcheur des contenus. Le catalogue et les demandes de publication s’appuient sur Supabase et peuvent être publiés sur GitHub Pages.</p>
+            <div class="project-facts">
+              <span>JavaScript</span><span>Supabase</span><span>GitHub Pages</span>
+            </div>
+            <p class="project-note"><span class="dot"></span> Projet archivé après une courte mise en ligne en juin 2026.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="musique" class="section-block portfolio-music-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Création musicale</p>
+          <h2>Des mélodies, des remixes, des ambiances.</h2>
+        </div>
+        <a class="btn secondary" href="https://open.spotify.com/intl-fr/artist/4cJNGWkJw2iy81WM92un0s?si=-WW8aH6ET4-GeikxdQHRRQ" target="_blank" rel="noopener">Écouter sur Spotify</a>
+      </div>
+
+      <div class="portfolio-music-grid">
+        <article class="card music-feature-card">
+          <div class="music-art-stack">
+            <img class="music-art music-art--back" src="assets/portfolio/spotify-single.png" alt="Capture d’une sortie musicale DJCreeper" loading="lazy">
+            <img class="music-art music-art--front" src="assets/portfolio/spotify-release.png" alt="Page Spotify d’une sortie de DJCreeper" loading="lazy">
+          </div>
+          <div class="music-feature-copy">
+            <p class="card-kicker">Une autre manière de raconter</p>
+            <h3>La musique accompagne les images, mais elle existe aussi seule.</h3>
+            <p>Je compose principalement des instrumentales et des remixes, sans m’enfermer dans un genre unique. Chaque morceau part d’une idée simple — une mélodie, un rythme ou une texture — puis devient un morceau arrangé et diffusé sur les plateformes.</p>
+            <p>De <strong>Sparkle Eyes Remix</strong> aux projets <strong>Not Alone</strong> et <strong>Not Alone Reloaded</strong>, les sorties servent de terrain d’expérimentation : piano répétitif, énergie électronique, phonk, atmosphères plus cinématographiques et collaborations.</p>
+          </div>
+        </article>
+
+        <article class="card music-process-card">
+          <p class="card-kicker cyan">Ma façon de travailler</p>
+          <h3>Un morceau se construit par couches.</h3>
+          <ol class="music-process">
+            <li><span>01</span><div><strong>Poser l’idée</strong><p>Une mélodie, une progression ou un rythme donne la direction et l’émotion du morceau.</p></div></li>
+            <li><span>02</span><div><strong>Construire l’arrangement</strong><p>Les batteries, basses, textures et variations donnent de la profondeur à la boucle initiale.</p></div></li>
+            <li><span>03</span><div><strong>Travailler le son</strong><p>Je règle les volumes, les effets et les transitions pour que chaque élément trouve sa place.</p></div></li>
+            <li><span>04</span><div><strong>Donner une image</strong><p>La pochette, le visualizer et la mise en ligne prolongent l’identité du morceau.</p></div></li>
+          </ol>
+          <div class="project-facts"><span>Composition</span><span>Remix</span><span>Visualizer</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="contact" class="portfolio-closing section-block">
+      <div class="card portfolio-closing-card">
+        <div>
+          <p class="eyebrow">Collaboration</p>
+          <h2>Un projet en tête&nbsp;? Parlons-en.</h2>
+          <p>Si tu veux travailler avec moi, envoie-moi un MP sur Discord à <strong>djcreeperytb</strong> ou contacte-moi directement sur Fiverr.</p>
+        </div>
+        <div class="cta">
+          <a class="btn" href="https://discord.com/channels/@me" target="_blank" rel="noopener">MP sur Discord</a>
+          <a class="btn secondary" href="https://fr.fiverr.com/s/d0pP6mZ" target="_blank" rel="noopener">Me contacter sur Fiverr</a>
+          <a class="btn ghost" href="https://github.com/DJCreeperYTB" target="_blank" rel="noopener">Voir mon GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container cols">
+      <div><strong>DJCreeper</strong><small>© <span id="year"></span> — Tous droits réservés</small></div>
+      <div><small><a href="index.html">Accueil</a></small><small><a href="wiki.html">Wiki</a></small></div>
+      <div><small><a href="portfolio.html">Portfolio</a></small><small><a href="dons.html">Soutenir</a></small></div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+  <script>document.getElementById('year').textContent = new Date().getFullYear()</script>
+</body>
+</html>

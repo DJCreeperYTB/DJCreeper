@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DJCreeper — Don</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
@@ -10,83 +10,65 @@
 <body>
   <header class="header">
     <div class="container nav">
-      <div class="brand">
-        <a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a>
-        <div class="brand-title">DJCreeper</div>
-      </div>
-      <button class="menu-btn" aria-label="Menu">☰ Menu</button>
-      <nav class="navlinks">
-        <a href="index.html">Accueil</a>
-        <a href="wiki.html">Wiki</a>
-        <a href="reglement.html">Règlement</a>
-        <a href="team.html">Team Creeper</a>
-        <a href="events.html">Événement</a>
-        <a href="shop.html">Shop</a>
-        <a href="dons.html">Don</a>
+      <div class="brand"><a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a><div class="brand-title">DJCreeper</div></div>
+      <button class="menu-btn" type="button" aria-label="Ouvrir le menu" aria-expanded="false">☰ Menu</button>
+      <nav class="navlinks" aria-label="Navigation principale">
+        <a href="index.html">Accueil</a><a href="wiki.html">Wiki</a><a href="portfolio.html">Portfolio</a><a href="reglement.html">Règlement</a><a href="team.html">Team Creeper</a><a href="events.html">Événements</a><a href="shop.html">Shop</a><a href="dons.html">Don</a>
       </nav>
     </div>
   </header>
 
   <main class="container">
-    <h1>Faire un don</h1>
-    <p class="muted">Merci pour le soutien. Chaque don aide à financer la musique, les projets et la communauté.</p>
+    <p class="eyebrow">Soutenir les projets</p>
+    <h1>Don &amp; boosters</h1>
+    <p class="muted">Chaque soutien aide à financer la musique, les vidéos et les projets de la communauté.</p>
+    <div class="space-lg"></div>
 
     <div class="grid grid-2">
-      <div class="card">
+      <section class="card">
+        <p class="card-kicker">Soutien direct</p>
         <h3>Passer par PayPal</h3>
-        <p><a class="btn" href="https://paypal.me/djcreeperytb" target="_blank" rel="noopener">Ouvrir PayPal</a></p>
-        <div class="alert">/!\ Seuls les dons à chiffre rond sont pris en compte.</div>
-      </div>
+        <p>Merci pour ton aide. Les dons à montant rond sont pris en compte dans l’historique.</p>
+        <a class="btn" href="https://paypal.me/djcreeperytb" target="_blank" rel="noopener">Ouvrir PayPal</a>
+        <div class="space"></div>
+        <div class="alert">Les dons sont utilisés pour la musique, les vidéos et les projets communautaires.</div>
+      </section>
 
-      <div class="card">
-        <h3>Historique des dons</h3>
-        <table class="table">
-          <thead>
-            <tr><th>Donateur</th><th>Date</th><th>Montant</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Tenshiakuma</td><td>03 mai 2026</td><td>10€</td></tr>
-            <tr><td>Azertiti</td><td>26 avril 2026</td><td>5€</td></tr>
-            <tr><td>Cr4c0t</td><td>22 avril 2026</td><td>5€</td></tr>
-            <tr><td>Xowen</td><td>18 avril 2026</td><td>5€</td></tr>
-            <tr><td>dayeetdude</td><td>7 septembre 2024</td><td>5€</td></tr>
-            <tr><td>Xowen</td><td>5 février 2026</td><td>3€</td></tr>
-            <tr><td>Cr4c0t</td><td>17 avril 2026</td><td>3€</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <section class="card">
+        <p class="card-kicker">Historique</p>
+        <h3>Derniers dons</h3>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Donateur</th><th>Date</th><th>Montant</th></tr></thead><tbody>
+          <tr><td>Tenshiakuma</td><td>03 mai 2026</td><td>10 €</td></tr>
+          <tr><td>Azertiti</td><td>26 avril 2026</td><td>5 €</td></tr>
+          <tr><td>Cr4c0t</td><td>22 avril 2026</td><td>5 €</td></tr>
+          <tr><td>Xowen</td><td>18 avril 2026</td><td>5 €</td></tr>
+          <tr><td>dayeetdude</td><td>7 septembre 2024</td><td>5 €</td></tr>
+          <tr><td>Xowen</td><td>5 février 2026</td><td>3 €</td></tr>
+          <tr><td>Cr4c0t</td><td>17 avril 2026</td><td>3 €</td></tr>
+        </tbody></table></div>
+      </section>
 
-      <div class="card">
+      <section class="card" style="grid-column: 1 / -1;">
+        <p class="card-kicker">Discord boost</p>
         <h3>Historique des boosters</h3>
-        <table class="table">
-          <thead>
-            <tr><th>Pseudo</th><th>Date</th><th>Statut</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>DJCreeper</td><td>18 novembre 2024</td><td><span class="status-actif">actif</span></td></tr>
-            <tr><td>DJCreeper</td><td>17 novembre 2024</td><td><span class="status-actif">actif</span></td></tr>
-            <tr><td>Olympe</td><td>9 septembre 2025</td><td>inactif</td></tr>
-            <tr><td>Cr4c0t</td><td>14 juin 2025</td><td>inactif</td></tr>
-            <tr><td>Cr4c0t</td><td>9 juin 2025</td><td>inactif</td></tr>
-            <tr><td>Noé</td><td>28 novembre 2025</td><td>inactif</td></tr>
-            <tr><td>Cr4c0t</td><td>28 mars 2025</td><td><span class="status-actif">actif</span></td></tr>
-            <tr><td>Cr4c0t</td><td>28 mars 2025</td><td><span class="status-actif">actif</span></td></tr>
-          </tbody>
-        </table>
-        <p><strong>Nombre de boosts actuels :</strong> 4</p>
-        <p><strong>Nombre de boosts total reçus :</strong> 8</p>
-      </div>
+        <p>Seuls les boosts de DJCreeper sont actuellement actifs. Les autres apparaissent dans l’historique mais sont marqués inactifs.</p>
+        <div class="table-wrap"><table class="table"><thead><tr><th>Pseudo</th><th>Date</th><th>Statut</th></tr></thead><tbody>
+          <tr><td>DJCreeper</td><td>18 novembre 2024</td><td><span class="status-actif">actif</span></td></tr>
+          <tr><td>DJCreeper</td><td>17 novembre 2024</td><td><span class="status-actif">actif</span></td></tr>
+          <tr><td>Modo | just elyse</td><td>18 mai 2026 · 17:03</td><td><span class="status-inactif">inactif</span></td></tr>
+          <tr><td>Modo | just elyse</td><td>18 mai 2026 · 17:07</td><td><span class="status-inactif">inactif</span></td></tr>
+          <tr><td>Captain Sasaki</td><td>14 juin 2026 · 21:23</td><td><span class="status-inactif">inactif</span></td></tr>
+          <tr><td>Admin | Cr4c0t</td><td>03 juillet 2026 · 17:27</td><td><span class="status-inactif">inactif</span></td></tr>
+          <tr><td>Admin | Cr4c0t</td><td>Date non précisée</td><td><span class="status-inactif">inactif</span></td></tr>
+        </tbody></table></div>
+        <div class="space"></div>
+        <p><strong>Boosts actifs :</strong> 2 · <strong>Boosts reçus listés :</strong> 7</p>
+      </section>
     </div>
   </main>
 
-  <footer class="footer">
-    <div class="container cols">
-      <div>
-        <strong>DJCreeper</strong>
-        <small>© <span id="year"></span></small>
-      </div>
-    </div>
-  </footer>
-<script>document.getElementById('year').textContent=new Date().getFullYear()</script>
+  <footer class="footer"><div class="container cols"><div><strong>DJCreeper</strong><small>© <span id="year"></span> — Tous droits réservés</small></div><div><small><a href="index.html">Accueil</a></small></div><div><small><a href="shop.html">Shop</a></small></div></div></footer>
+  <script src="js/script.js"></script>
+  <script>document.getElementById('year').textContent = new Date().getFullYear()</script>
 </body>
 </html>
