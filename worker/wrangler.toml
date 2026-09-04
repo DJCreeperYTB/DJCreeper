@@ -8,6 +8,14 @@ compatibility_date = "2026-09-04"
 PUBLIC_ORIGIN = "https://djcreeper.pages.dev"
 ALLOW_LOCAL_DEMO = "false"
 
+# Paramètres publics de vérification Cloudflare Access pour les routes /api/admin/*.
+# À renseigner après création de l’application Access ; aucun token n’est à mettre ici.
+# CF_ACCESS_TEAM_DOMAIN = "https://TON-EQUIPE.cloudflareaccess.com"
+# CF_ACCESS_AUDIENCE = "AUDIENCE_DE_L_APPLICATION_ACCESS"
+# EMAIL_PROVIDER = "resend"
+# EMAIL_FROM = "DJCreeper <support@ton-domaine.fr>"
+# EMAIL_REPLY_TO = "support@ton-domaine.fr"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "djcreeper-shop"

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS orders (
   promo_code TEXT,
   payment_status TEXT NOT NULL,
   payment_method TEXT NOT NULL,
+  order_status TEXT NOT NULL DEFAULT 'EN PRÉPARATION',
   proof_key TEXT,
   proof_json TEXT,
   created_at TEXT NOT NULL

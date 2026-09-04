@@ -122,17 +122,40 @@ function renderProducts() {
   target.replaceChildren()
   SHOP_CONFIG.products.forEach(product => {
     const card = makeElement('article', 'card shop-product-card')
+    const images = Array.isArray(product.images) && product.images.length ? product.images : product.image ? [product.image] : []
+    const gallery = makeElement('div', 'shop-product-gallery')
     const art = makeElement('div', 'shop-product-art')
-    if (product.image) {
+    if (images.length) {
       const image = document.createElement('img')
-      image.src = product.image
-      image.alt = product.name
+      image.src = images[0]
+      image.alt = `${product.name} · vue 1`
       image.loading = 'lazy'
+      image.dataset.galleryMain = product.id
       art.append(image)
+      gallery.append(art)
+      if (images.length > 1) {
+        const thumbnails = makeElement('div', 'shop-product-thumbnails')
+        images.slice(0, 3).forEach((source, index) => {
+          const thumbnail = makeElement('button', `shop-product-thumbnail${index === 0 ? ' is-selected' : ''}`)
+          thumbnail.type = 'button'
+          thumbnail.dataset.galleryImage = source
+          thumbnail.dataset.galleryProduct = product.id
+          thumbnail.setAttribute('aria-label', `Afficher ${product.name}, vue ${index + 1}`)
+          thumbnail.setAttribute('aria-pressed', String(index === 0))
+          const thumbnailImage = document.createElement('img')
+          thumbnailImage.src = source
+          thumbnailImage.alt = ''
+          thumbnailImage.loading = 'lazy'
+          thumbnail.append(thumbnailImage)
+          thumbnails.append(thumbnail)
+        })
+        gallery.append(thumbnails)
+      }
     } else {
       art.append(makeElement('span', '', product.testProduct ? 'TEST' : product.type.toUpperCase()))
+      gallery.append(art)
     }
-    card.append(art)
+    card.append(gallery)
 
     const topline = makeElement('div', 'shop-product-topline')
     topline.append(makeElement('h3', '', product.name))
@@ -430,12 +453,9 @@ function nextLocalNumber(prefix = 'DJC') {
 }
 
 function automaticHistory(ticketNumber) {
-  const sellerMode = SHOP_CONFIG.sellerStatus.mode
-  const available = sellerMode === 'available'
-  const busy = sellerMode === 'busy'
   return [
     { author: 'support', automated: true, createdAt: new Date().toISOString(), body: `Bonjour !\n\nTa demande a bien été reçue.\n\nUn vendeur va la consulter dès que possible.\n\nTicket : #${ticketNumber}` },
-    { author: 'support', automated: true, createdAt: new Date().toISOString(), body: available ? 'Un vendeur est actuellement disponible. Ta demande devrait être traitée rapidement.' : busy ? 'Un vendeur est actuellement occupé. Ta demande est bien enregistrée et sera traitée dès que possible.' : 'Aucun vendeur n’est disponible pour le moment.\n\nPas d’inquiétude : ta demande est bien enregistrée et sera traitée dès qu’un vendeur sera de retour.' }
+    { author: 'support', automated: true, createdAt: new Date().toISOString(), body: 'Ta demande est bien enregistrée. Un vendeur la consultera dès que possible.' }
   ]
 }
 
@@ -447,6 +467,7 @@ function localTicket(payload, withOrder) {
     ticketNumber,
     orderNumber,
     customer: payload.customer,
+    orderStatus: withOrder ? 'EN PRÉPARATION' : '',
     subject: payload.subject || (withOrder ? 'Commande CD DJCreeper' : 'Demande support'),
     category: payload.category || 'Commande',
     products: withOrder ? cartEntries().map(({ line, product }) => ({ id: product.id, name: product.name, quantity: line.quantity, price: product.price })) : [],
@@ -534,6 +555,7 @@ function showTicket(ticket) {
   if ($('#ticket-access-token')) $('#ticket-access-token').textContent = ticket.accessToken || ''
   $('#ticket-customer').textContent = ticket.customer ? [ticket.customer.firstName, ticket.customer.lastName].filter(Boolean).join(' ') + (ticket.customer.email ? ` · ${ticket.customer.email}` : '') : '—'
   $('#ticket-order-number').textContent = ticket.orderNumber || 'Sans commande'
+  $('#ticket-order-status').textContent = ticket.orderStatus || 'Non concerné'
   $('#ticket-created-at').textContent = dateLabel(ticket.createdAt)
   $('#ticket-payment-status').textContent = ticket.paymentStatus || 'À VÉRIFIER'
   $('#ticket-total').textContent = ticket.orderNumber ? money(ticket.totals?.total) : '—'
@@ -554,9 +576,9 @@ function renderHistory() {
   if (!historyTarget || !state.ticket) return
   historyTarget.replaceChildren()
   ;(state.ticket.history || []).forEach(message => {
-    const item = makeElement('article', `ticket-message${message.automated ? ' is-automated' : ''}${message.author === 'client' ? ' is-human' : ''}`)
+    const item = makeElement('article', `ticket-message${message.automated ? ' is-automated' : ''}${message.author === 'client' ? ' is-human' : ''}${message.author === 'vendor' ? ' is-vendor' : ''}`)
     const meta = makeElement('div', 'ticket-message-meta')
-    meta.append(makeElement('span', '', message.automated ? 'Message automatique' : 'Toi'), makeElement('time', '', dateLabel(message.createdAt)))
+    meta.append(makeElement('span', '', message.automated ? 'Message automatique' : message.author === 'vendor' ? 'Vendeur' : 'Toi'), makeElement('time', '', dateLabel(message.createdAt)))
     item.append(meta, makeElement('p', 'ticket-message-body', message.body))
     historyTarget.append(item)
   })
@@ -715,18 +737,6 @@ function onProofChange(event) {
   setMessage($('#paypal-feedback'), '')
 }
 
-function applySellerStatus() {
-  const mode = ['available', 'busy', 'unavailable'].includes(SHOP_CONFIG.sellerStatus.mode) ? SHOP_CONFIG.sellerStatus.mode : 'unavailable'
-  const label = SHOP_CONFIG.sellerStatus.labels[mode]
-  const top = $('#shop-seller-status')
-  const card = $('#support-seller-label')
-  ;[top, card].filter(Boolean).forEach(element => {
-    element.textContent = label
-    element.classList.remove('available', 'busy', 'unavailable')
-    element.classList.add(mode, 'seller-status')
-  })
-}
-
 function renderRecoveryAvailability() {
   const recovery = $('#ticket-recovery')
   if (recovery) recovery.hidden = !apiBase()
@@ -761,6 +771,22 @@ function bindEvents() {
     $('#cart-title')?.focus()
   })
   $('#shop-products')?.addEventListener('click', event => {
+    const galleryButton = event.target.closest('[data-gallery-image]')
+    if (galleryButton) {
+      const card = galleryButton.closest('.shop-product-card')
+      const mainImage = card?.querySelector('[data-gallery-main]')
+      if (mainImage) {
+        const index = [...card.querySelectorAll('[data-gallery-image]')].indexOf(galleryButton)
+        mainImage.src = galleryButton.dataset.galleryImage
+        mainImage.alt = `${productById(galleryButton.dataset.galleryProduct)?.name || 'Produit'} · vue ${index + 1}`
+        card.querySelectorAll('[data-gallery-image]').forEach(button => {
+          const selected = button === galleryButton
+          button.classList.toggle('is-selected', selected)
+          button.setAttribute('aria-pressed', String(selected))
+        })
+      }
+      return
+    }
     const button = event.target.closest('[data-add-product]')
     if (!button) return
     const productId = button.dataset.addProduct
@@ -836,7 +862,6 @@ function init() {
   renderStoreConfiguration()
   renderProducts()
   renderCart()
-  applySellerStatus()
   bindEvents()
   renderRecoveryAvailability()
   goToStep(1)

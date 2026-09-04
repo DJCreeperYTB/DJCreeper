@@ -5,12 +5,13 @@ Le site reste statique et conserve ses pages existantes. Le Shop ajoute une arch
 ## Architecture
 
 - `shop.html` : boutique, panier, checkout, Mondial Relay de démonstration et formulaire de support.
-- `config/shop-config.js` : configuration centrale partagée par le frontend et le Worker. Elle contient les produits, prix, poids, disponibilité, promo de test, livraison, PayPal, fidélité et statut vendeur. Elle ne doit contenir aucun secret.
+- `config/shop-config.js` : configuration centrale publique partagée par le frontend et le Worker. Elle contient les produits, prix, poids, disponibilité, promo de test, livraison, PayPal et fidélité. Elle ne doit contenir aucun secret ni statut opérationnel vendeur.
 - `js/shop.js` : logique isolée du Shop. Le panier utilise uniquement `localStorage` pour des références produit et des quantités. Les données client, tickets et captures restent en mémoire dans le mode local.
 - `css/shop.css` : composants visuels propres au Shop, construits avec les variables et cartes du site existant.
 - `worker/src/index.js` : API Cloudflare Workers optionnelle, avec validation serveur, sanitation, limitation de débit, Turnstile optionnel, jetons d’accès privés pour les tickets et stockage D1/R2.
+- `worker/src/worker-config.js` : configuration côté Worker du statut vendeur ; elle n’est pas chargée par `shop.html`.
 - `worker/src/mondial-relay-adapter.js` : adaptateur isolé pour les points relais, en mode démonstration aujourd’hui et prêt pour l’API officielle plus tard.
-- `worker/schema.sql` : tables D1 pour commandes, tickets, historique et compteurs.
+- `worker/schema.sql` : tables D1 pour commandes, tickets, historique, compteurs et quota R2.
 - `worker/wrangler.toml` : bindings D1/R2/KV de production ; `PUBLIC_ORIGIN` reste temporairement local jusqu’à réception du domaine Pages.
 
 Le navigateur ne communique jamais avec un PC vendeur. La cible est :
@@ -55,7 +56,12 @@ Les produits sont ajoutés dans `config/shop-config.js`, sans modifier `shop.htm
   type: 'single',
   price: 6,
   weight: 80,
-  image: 'assets/shop/single-exemple.jpg',
+  image: 'assets/shop/single-exemple-1.jpg',
+  images: [
+    'assets/shop/single-exemple-1.jpg',
+    'assets/shop/single-exemple-2.jpg',
+    'assets/shop/single-exemple-3.jpg'
+  ],
   description: 'Description courte.',
   available: true,
   preorder: true,
@@ -70,6 +76,7 @@ Les produits sont ajoutés dans `config/shop-config.js`, sans modifier `shop.htm
 - `weight` est exprimé en grammes et est prêt à servir au futur calcul de poids.
 - `available: false` masque l’ajout au panier.
 - `preorder: true` permet d’identifier une précommande.
+- `images` contient jusqu’à trois vues du CD ; la première est utilisée comme image principale et les autres comme miniatures.
 - Aucun vrai produit CD n’est actuellement ajouté.
 
 Pour ajouter un Single, un EP ou un Album, ajouter un objet à `SHOP_CONFIG.products` avec un nouvel `id`, puis vérifier son texte, son image, son poids et sa disponibilité. Le Worker recalculera le montant depuis cette même configuration : le prix transmis par le navigateur ne fait pas autorité.
@@ -117,26 +124,43 @@ Le Worker prévoit :
 - absence de route publique de lecture d’un ticket par numéro seul ;
 - aucun secret, token privé, IP, port, nom d’ordinateur ou adresse locale dans le frontend.
 
+## Panel vendeur privé et e-mails
+
+Le panel est volontairement séparé du dépôt public, dans `C:\Users\DJCre\Documents\code\DJCreeper Admin Panel`. Il contient `admin.html`, `admin.js`, `admin.css` et `admin-config.js`. Il permet de filtrer les tickets, consulter leur fiche, répondre au client, vérifier une preuve R2 et modifier l’état du ticket ou de la commande.
+
+Le statut « Vendeur disponible / Vendeur occupé / Aucun vendeur disponible » est réservé au panel. Il n’est plus chargé par `shop.html`. Les informations d’état de commande sont également réservées au panel vendeur.
+
+L’adaptateur `worker/src/email-adapter.js` est prêt pour les e-mails transactionnels via Resend : création d’un ticket, réponse vendeur et chaque changement d’état d’une commande. Les e-mails sont envoyés en tâche différée ; un échec d’e-mail ne supprime pas une commande déjà enregistrée. Sans fournisseur configuré, aucune tentative d’envoi n’est effectuée.
+
+Resend demande une clé API, un expéditeur provenant d’un domaine vérifié et un appel HTTPS vers son API ; la clé reste exclusivement dans un secret Wrangler. [Documentation officielle Resend pour Cloudflare Workers](https://resend.com/docs/send-with-cloudflare-workers) et [API d’envoi](https://resend.com/docs/api-reference/emails/send-email).
+
 ## Activer Cloudflare
 
 Le backend n’est pas déployé dans ce dépôt. Pour le préparer :
 
 1. Installer les dépendances dans `worker/` (`npm install`).
 2. Créer une base D1 puis exécuter `worker/schema.sql` avec Wrangler.
+   Si la base avait déjà reçu l’ancien schéma, exécuter une seule fois `worker/migrations/0002_order_status.sql` avant de déployer le Worker mis à jour.
 3. Créer un bucket R2 privé pour `PAYMENT_PROOFS`.
 4. Créer un namespace KV pour `RATE_LIMIT_KV`.
 5. Les bindings de production sont déjà renseignés dans `worker/wrangler.toml`. Vérifier qu’ils correspondent bien aux ressources du compte avant la première exécution distante.
 6. Remplacer `PUBLIC_ORIGIN` par le domaine Cloudflare Pages et passer `ALLOW_LOCAL_DEMO` à `false`.
 7. Ajouter les secrets uniquement avec Wrangler, par exemple `wrangler secret put TURNSTILE_SECRET_KEY` si Turnstile est activé.
-8. Déployer le Worker, puis renseigner son URL publique dans `SHOP_CONFIG.api.baseUrl`.
+8. Pour les e-mails, définir les variables non secrètes `EMAIL_PROVIDER=resend`, `EMAIL_FROM="DJCreeper <support@ton-domaine.fr>"` et éventuellement `EMAIL_REPLY_TO`, puis enregistrer la clé avec `npx wrangler secret put EMAIL_API_KEY`.
+9. Protéger `/admin.html` et `/api/admin/*` avec Cloudflare Access, puis renseigner `CF_ACCESS_TEAM_DOMAIN` et `CF_ACCESS_AUDIENCE` dans les variables du Worker. Ajouter éventuellement `npx wrangler secret put ADMIN_ALLOWED_EMAILS`.
+10. Déployer le Worker, puis renseigner son URL publique dans `admin-config.js` et, pour le Shop public, dans `SHOP_CONFIG.api.baseUrl`.
 
 Commandes recommandées depuis le dossier `worker/` :
 
 ```text
 npm install
 npx wrangler d1 execute djcreeper-shop --remote --file=schema.sql --config=wrangler.toml
+# seulement pour une base déjà initialisée avant l’ajout du suivi de commande :
+npx wrangler d1 execute djcreeper-shop --remote --file=migrations/0002_order_status.sql --config=wrangler.toml
 npx wrangler r2 bucket list
 npx wrangler kv namespace list
+npx wrangler secret put EMAIL_API_KEY
+npx wrangler secret put ADMIN_ALLOWED_EMAILS
 ```
 
 Si le bucket n’existe pas encore, le créer une seule fois avec `npx wrangler r2 bucket create djcreeper-payment-proofs --config=wrangler.toml`. Ne pas exécuter le déploiement public tant que le domaine Pages n’est pas connu. Après réception de ce domaine, déployer avec `npx wrangler deploy --config=wrangler.toml --var PUBLIC_ORIGIN:https://TON-DOMAINE-PAGES` puis renseigner l’URL du Worker dans la configuration publique du Shop.
@@ -147,6 +171,8 @@ Les identifiants D1, R2, KV et les secrets ne sont pas fournis dans Git. Tant qu
 
 ## Fichiers modifiés et ajoutés
 
-Modifiés : `events.html`, `shop.html`.
+Modifiés : `events.html`, `index.html`, `shop.html`, `js/shop.js`, `css/shop.css`, `config/shop-config.js`, `worker/src/index.js`, `worker/schema.sql`, `worker/wrangler.toml`, `README.md`.
 
-Ajoutés : `config/shop-config.js`, `css/shop.css`, `js/shop.js`, `worker/src/index.js`, `worker/src/mondial-relay-adapter.js`, `worker/schema.sql`, `worker/wrangler.toml`, `worker/package.json`, `README.md`.
+Ajoutés dans le dépôt du site : `worker/src/mondial-relay-adapter.js`, `worker/src/worker-config.js`, `worker/src/email-adapter.js`, `worker/migrations/0002_order_status.sql`, `worker/package.json`.
+
+Ajoutés hors dépôt GitHub, dans `C:\Users\DJCre\Documents\code\DJCreeper Admin Panel` : `admin.html`, `admin.js`, `admin.css`, `admin-config.js`, `README.md`.

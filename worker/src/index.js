@@ -1,11 +1,17 @@
 import SHOP_CONFIG from '../../config/shop-config.js'
 import { canonicalRelay } from './mondial-relay-adapter.js'
+import WORKER_CONFIG from './worker-config.js'
+import { queueTransactionalEmail } from './email-adapter.js'
 
 const memoryTickets = new Map()
 const memoryCounters = { ticket: 0, order: 0 }
 const memoryRateLimits = new Map()
 const ALLOWED_CATEGORIES = new Set(['Question avant achat', 'Commande', 'Paiement', 'Livraison', 'Produit', 'Problème technique', 'Autre'])
+const ALLOWED_TICKET_STATUSES = new Set(['NOUVEAU', 'EN COURS', 'EN ATTENTE CLIENT', 'EN ATTENTE VENDEUR', 'RÉSOLU'])
+const ALLOWED_PAYMENT_STATUSES = new Set(['À VÉRIFIER', 'PAYÉ', 'REFUSÉ'])
+const ALLOWED_ORDER_STATUSES = new Set(['EN PRÉPARATION', 'PRÊTE À EXPÉDIER', 'EXPÉDIÉE', 'EN TRANSIT', 'LIVRÉE', 'ANNULÉE'])
 const MAX_JSON_BYTES = 10 * 1024 * 1024
+let accessCertificatesCache = { issuer: '', expiresAt: 0, keys: [] }
 
 function configuredOrigins(env) {
   return String(env.PUBLIC_ORIGIN || '').split(',').map(value => value.trim()).filter(Boolean)
@@ -23,6 +29,7 @@ function corsHeaders(request, env) {
   const headers = {
     'Access-Control-Allow-Headers': 'content-type',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json; charset=utf-8',
@@ -53,6 +60,39 @@ function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : ''
 }
 
+function emailText(value, maxLength = 2000) {
+  return cleanText(value, maxLength).replace(/\r/g, '')
+}
+
+function queueTicketCreatedEmail(ctx, env, record, accessToken) {
+  const customerName = [record.customer?.firstName, record.customer?.lastName].filter(Boolean).join(' ') || 'Bonjour'
+  const orderLine = record.orderNumber ? `Commande : ${record.orderNumber}\n` : ''
+  queueTransactionalEmail(ctx, env, {
+    to: record.customer.email,
+    subject: `[DJCreeper] Ticket ${record.ticketNumber} enregistré`,
+    text: `${customerName},\n\nTa demande a bien été enregistrée.\n\nTicket : ${record.ticketNumber}\n${orderLine}Conserve cette clé privée pour retrouver la conversation :\n${accessToken}\n\nLe paiement, s’il y en a un, reste à vérifier manuellement.\n\nDJCreeper`,
+    idempotencyKey: `ticket-created-${record.ticketNumber}`
+  })
+}
+
+function queueVendorReplyEmail(ctx, env, record, message) {
+  queueTransactionalEmail(ctx, env, {
+    to: record.customer?.email,
+    subject: `[DJCreeper] Nouvelle réponse sur le ticket ${record.ticketNumber}`,
+    text: `Bonjour,\n\nUn vendeur a répondu à ton ticket ${record.ticketNumber}.\n\nRéponse :\n${emailText(message)}\n\nUtilise le numéro du ticket et ta clé privée reçue à la création pour retrouver la conversation.\n\nDJCreeper`,
+    idempotencyKey: `ticket-reply-${record.ticketNumber}-${Date.now()}`
+  })
+}
+
+function queueOrderStatusEmail(ctx, env, record, orderStatus) {
+  queueTransactionalEmail(ctx, env, {
+    to: record.customer?.email,
+    subject: `[DJCreeper] ${record.orderNumber} · ${orderStatus}`,
+    text: `Bonjour,\n\nL’état de ta commande ${record.orderNumber} est maintenant :\n${orderStatus}\n\nTicket associé : ${record.ticketNumber}\n\nDJCreeper`,
+    idempotencyKey: `order-status-${record.orderNumber}-${orderStatus}`
+  })
+}
+
 async function readJson(request) {
   const contentLength = Number(request.headers.get('Content-Length') || 0)
   if (contentLength > MAX_JSON_BYTES) throw new Error('Requête trop volumineuse.')
@@ -70,6 +110,63 @@ function randomToken() {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function base64UrlBytes(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4)
+  const binary = atob(padded)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return bytes
+}
+
+function decodeJwtPart(value) {
+  return JSON.parse(new TextDecoder().decode(base64UrlBytes(value)))
+}
+
+function accessIssuer(env) {
+  return String(env.CF_ACCESS_TEAM_DOMAIN || '').trim().replace(/\/$/, '')
+}
+
+async function verifyAdminAccess(request, env) {
+  const issuer = accessIssuer(env)
+  const audience = String(env.CF_ACCESS_AUDIENCE || '').trim()
+  const assertion = request.headers.get('CF-Access-Jwt-Assertion')
+  if (!issuer || !audience || !assertion) return null
+
+  try {
+    const parts = assertion.split('.')
+    if (parts.length !== 3) return null
+    const header = decodeJwtPart(parts[0])
+    const payload = decodeJwtPart(parts[1])
+    if (header.alg !== 'RS256' || !header.kid) return null
+    const issuerMatches = payload.iss === issuer || payload.iss === `${issuer}/`
+    const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
+    const now = Math.floor(Date.now() / 1000)
+    if (!issuerMatches || !audiences.includes(audience) || !Number(payload.exp) || Number(payload.exp) <= now || (payload.nbf && Number(payload.nbf) > now + 30)) return null
+
+    let keys = accessCertificatesCache.keys
+    if (accessCertificatesCache.issuer !== issuer || accessCertificatesCache.expiresAt <= Date.now() || !keys.length) {
+      const response = await fetch(`${issuer}/cdn-cgi/access/certs`, { headers: { Accept: 'application/json' } })
+      if (!response.ok) return null
+      const result = await response.json()
+      keys = Array.isArray(result.keys) ? result.keys : []
+      accessCertificatesCache = { issuer, expiresAt: Date.now() + 5 * 60 * 1000, keys }
+    }
+    const jwk = keys.find(key => key.kid === header.kid)
+    if (!jwk) return null
+    const cryptoKey = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
+    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, base64UrlBytes(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`))
+    if (!valid) return null
+
+    const allowedEmails = String(env.ADMIN_ALLOWED_EMAILS || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean)
+    const email = cleanText(payload.email, SHOP_CONFIG.limits.maxEmailLength).toLowerCase()
+    if (allowedEmails.length && (!email || !allowedEmails.includes(email))) return null
+    return { email }
+  } catch (error) {
+    return null
+  }
 }
 
 async function rateLimit(request, env, scope, limit, windowMs) {
@@ -217,11 +314,10 @@ async function nextNumber(env, type) {
   }
 }
 
-function automaticHistory(ticketNumber, sellerMode) {
-  const available = sellerMode === 'available'
+function automaticHistory(ticketNumber) {
   return [
     { author: 'support', automated: true, createdAt: new Date().toISOString(), body: `Bonjour !\n\nTa demande a bien été reçue.\n\nUn vendeur va la consulter dès que possible.\n\nTicket : #${ticketNumber}` },
-    { author: 'support', automated: true, createdAt: new Date().toISOString(), body: available ? 'Un vendeur est actuellement disponible. Ta demande devrait être traitée rapidement.' : 'Aucun vendeur n’est disponible pour le moment.\n\nPas d’inquiétude : ta demande est bien enregistrée et sera traitée dès qu’un vendeur sera de retour.' }
+    { author: 'support', automated: true, createdAt: new Date().toISOString(), body: 'Ta demande est bien enregistrée. Un vendeur la consultera dès que possible.' }
   ]
 }
 
@@ -230,6 +326,7 @@ function publicTicket(record) {
   return {
     ticketNumber: record.ticketNumber,
     orderNumber: record.orderNumber || '',
+    orderStatus: record.orderStatus || '',
     customer: record.customer,
     subject: record.subject,
     category: record.category,
@@ -240,11 +337,12 @@ function publicTicket(record) {
     paymentProof,
     paymentStatus: record.paymentStatus || 'NON CONCERNÉ',
     status: record.status || 'NOUVEAU',
-    history: record.history || []
+    history: record.history || [],
+    updatedAt: record.updatedAt || record.createdAt
   }
 }
 
-async function createOrderRecord(payload, env) {
+async function createOrderRecord(payload, env, ctx) {
   if (payload.consent !== true) throw new Error('Le consentement est obligatoire.')
   const customer = validateCustomer(payload.customer, true)
   const order = calculateOrder(payload)
@@ -268,27 +366,29 @@ async function createOrderRecord(payload, env) {
     products: order.items,
     totals: { subtotal: order.subtotal, discount: order.discount, shipping: order.shipping, total: order.total },
     relay: order.relay,
+    orderStatus: 'EN PRÉPARATION',
     paymentStatus: 'À VÉRIFIER',
     paymentMethod: payment.method,
     paymentProof,
     status: 'NOUVEAU',
-    history: automaticHistory(ticketNumber, SHOP_CONFIG.sellerStatus.mode),
+    history: automaticHistory(ticketNumber),
     createdAt,
     accessTokenHash
   }
   if (env.DB) {
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO orders (id, order_number, customer_json, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, promo_code, payment_status, payment_method, proof_key, proof_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(record.id, record.orderNumber, JSON.stringify(customer), JSON.stringify(record.products), Math.round(order.subtotal * 100), Math.round(order.discount * 100), Math.round(order.shipping * 100), Math.round(order.total * 100), JSON.stringify(order.relay), order.promoCode, record.paymentStatus, record.paymentMethod, paymentProof?.storageKey || null, JSON.stringify(paymentProof), createdAt),
+      env.DB.prepare('INSERT INTO orders (id, order_number, customer_json, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, promo_code, payment_status, payment_method, order_status, proof_key, proof_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(record.id, record.orderNumber, JSON.stringify(customer), JSON.stringify(record.products), Math.round(order.subtotal * 100), Math.round(order.discount * 100), Math.round(order.shipping * 100), Math.round(order.total * 100), JSON.stringify(order.relay), order.promoCode, record.paymentStatus, record.paymentMethod, record.orderStatus, paymentProof?.storageKey || null, JSON.stringify(paymentProof), createdAt),
       env.DB.prepare('INSERT INTO tickets (id, ticket_number, order_id, customer_json, subject, category, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, payment_status, proof_json, status, access_token_hash, history_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), record.ticketNumber, record.id, JSON.stringify(customer), record.subject, record.category, JSON.stringify(record.products), Math.round(order.subtotal * 100), Math.round(order.discount * 100), Math.round(order.shipping * 100), Math.round(order.total * 100), JSON.stringify(order.relay), record.paymentStatus, JSON.stringify(paymentProof), record.status, accessTokenHash, JSON.stringify(record.history), createdAt, createdAt)
     ])
   } else {
     if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
     memoryTickets.set(record.ticketNumber, record)
   }
+  queueTicketCreatedEmail(ctx, env, record, accessToken)
   return { ticket: publicTicket(record), ticketAccessToken: accessToken }
 }
 
-async function createSupportRecord(payload, env) {
+async function createSupportRecord(payload, env, ctx) {
   const email = validEmail(payload.email || payload.customer?.email)
   const subject = cleanText(payload.subject, SHOP_CONFIG.limits.maxSubjectLength)
   const category = cleanText(payload.category, 60)
@@ -311,7 +411,7 @@ async function createSupportRecord(payload, env) {
     paymentStatus: 'NON CONCERNÉ',
     paymentProof: null,
     status: 'NOUVEAU',
-    history: automaticHistory(ticketNumber, SHOP_CONFIG.sellerStatus.mode),
+    history: automaticHistory(ticketNumber),
     createdAt,
     accessTokenHash
   }
@@ -322,6 +422,7 @@ async function createSupportRecord(payload, env) {
     if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
     memoryTickets.set(record.ticketNumber, record)
   }
+  queueTicketCreatedEmail(ctx, env, record, accessToken)
   return { ticket: publicTicket(record), ticketAccessToken: accessToken }
 }
 
@@ -335,7 +436,7 @@ async function viewTicket(payload, env) {
     if (!record || record.accessTokenHash !== accessTokenHash) throw new Error('Ticket introuvable.')
     return { ticket: publicTicket(record) }
   }
-  const row = await env.DB.prepare('SELECT t.*, o.order_number FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
+  const row = await env.DB.prepare('SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
   if (!row) throw new Error('Ticket introuvable.')
   return { ticket: publicTicket(recordFromRow(row)) }
 }
@@ -346,7 +447,9 @@ function recordFromRow(row) {
   return {
     id: row.id,
     ticketNumber: row.ticket_number,
+    orderId: row.order_id || '',
     orderNumber: row.order_number || '',
+    orderStatus: row.order_status || '',
     customer,
     subject: row.subject,
     category: row.category,
@@ -358,6 +461,7 @@ function recordFromRow(row) {
     status: row.status,
     history: JSON.parse(row.history_json || '[]'),
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
     accessTokenHash: row.access_token_hash
   }
 }
@@ -375,7 +479,7 @@ async function appendTicketMessage(payload, env) {
     if (record.status === 'NOUVEAU') record.status = 'EN ATTENTE VENDEUR'
     return { ticket: publicTicket(record) }
   }
-  const row = await env.DB.prepare('SELECT t.*, o.order_number FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
+  const row = await env.DB.prepare('SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
   if (!row) throw new Error('Ticket introuvable.')
   const record = recordFromRow(row)
   record.history.push({ author: 'client', automated: false, createdAt: new Date().toISOString(), body: message })
@@ -386,25 +490,233 @@ async function appendTicketMessage(payload, env) {
   return { ticket: publicTicket(record) }
 }
 
-async function handle(request, env) {
+function adminFilter(payload) {
+  const status = cleanText(payload?.status, 40)
+  const search = cleanText(payload?.search, 100)
+  if (status && !ALLOWED_TICKET_STATUSES.has(status)) throw new Error('Statut de ticket invalide.')
+  return { status, search }
+}
+
+async function adminTicketRow(ticketNumber, env) {
+  if (!env.DB) return null
+  return env.DB.prepare('SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ?').bind(ticketNumber).first()
+}
+
+function matchesAdminSearch(record, search) {
+  if (!search) return true
+  const needle = search.toLowerCase()
+  return [record.ticketNumber, record.orderNumber, record.subject, record.category, record.customer?.email, record.customer?.firstName, record.customer?.lastName]
+    .some(value => String(value || '').toLowerCase().includes(needle))
+}
+
+async function listAdminTickets(payload, env) {
+  const { status, search } = adminFilter(payload)
+  if (!env.DB) {
+    if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
+    const tickets = [...memoryTickets.values()]
+      .filter(record => (!status || record.status === status) && matchesAdminSearch(record, search))
+      .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+    return { total: tickets.length, tickets: tickets.map(publicTicket) }
+  }
+
+  const clauses = []
+  const bindings = []
+  if (status) {
+    clauses.push('t.status = ?')
+    bindings.push(status)
+  }
+  if (search) {
+    const pattern = `%${search}%`
+    clauses.push('(t.ticket_number LIKE ? OR o.order_number LIKE ? OR t.subject LIKE ? OR t.category LIKE ? OR t.customer_json LIKE ?)')
+    bindings.push(pattern, pattern, pattern, pattern, pattern)
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+  const countRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM tickets t LEFT JOIN orders o ON o.id = t.order_id ${where}`).bind(...bindings).first()
+  const rows = await env.DB.prepare(`SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id ${where} ORDER BY t.created_at DESC LIMIT 200`).bind(...bindings).all()
+  return { total: Number(countRow?.total || 0), tickets: (rows.results || []).map(row => publicTicket(recordFromRow(row))) }
+}
+
+async function getAdminTicket(payload, env) {
+  const ticketNumber = cleanText(payload?.ticketNumber, 40)
+  if (!ticketNumber) throw new Error('Ticket introuvable.')
+  if (!env.DB) {
+    if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
+    const record = memoryTickets.get(ticketNumber)
+    if (!record) throw new Error('Ticket introuvable.')
+    return { ticket: publicTicket(record) }
+  }
+  const row = await adminTicketRow(ticketNumber, env)
+  if (!row) throw new Error('Ticket introuvable.')
+  return { ticket: publicTicket(recordFromRow(row)) }
+}
+
+async function updateAdminStatus(payload, env) {
+  const ticketNumber = cleanText(payload?.ticketNumber, 40)
+  const status = cleanText(payload?.status, 40)
+  if (!ticketNumber || !ALLOWED_TICKET_STATUSES.has(status)) throw new Error('Statut de ticket invalide.')
+  if (!env.DB) {
+    if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
+    const record = memoryTickets.get(ticketNumber)
+    if (!record) throw new Error('Ticket introuvable.')
+    record.status = status
+    record.updatedAt = new Date().toISOString()
+    return { ticket: publicTicket(record) }
+  }
+  const updatedAt = new Date().toISOString()
+  const result = await env.DB.prepare('UPDATE tickets SET status = ?, updated_at = ? WHERE ticket_number = ?').bind(status, updatedAt, ticketNumber).run()
+  if (Number(result.meta?.changes || 0) !== 1) throw new Error('Ticket introuvable.')
+  return getAdminTicket({ ticketNumber }, env)
+}
+
+async function updateAdminPaymentStatus(payload, env) {
+  const ticketNumber = cleanText(payload?.ticketNumber, 40)
+  const paymentStatus = cleanText(payload?.paymentStatus, 40)
+  if (!ticketNumber || !ALLOWED_PAYMENT_STATUSES.has(paymentStatus)) throw new Error('Statut de paiement invalide.')
+  if (!env.DB) {
+    if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
+    const record = memoryTickets.get(ticketNumber)
+    if (!record) throw new Error('Ticket introuvable.')
+    record.paymentStatus = paymentStatus
+    record.updatedAt = new Date().toISOString()
+    return { ticket: publicTicket(record) }
+  }
+  const row = await adminTicketRow(ticketNumber, env)
+  if (!row) throw new Error('Ticket introuvable.')
+  const statements = [env.DB.prepare('UPDATE tickets SET payment_status = ?, updated_at = ? WHERE ticket_number = ?').bind(paymentStatus, new Date().toISOString(), ticketNumber)]
+  if (row.order_id) statements.push(env.DB.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').bind(paymentStatus, row.order_id))
+  await env.DB.batch(statements)
+  return getAdminTicket({ ticketNumber }, env)
+}
+
+async function appendAdminMessage(payload, env, identity, ctx) {
+  const ticketNumber = cleanText(payload?.ticketNumber, 40)
+  const message = cleanText(payload?.message, SHOP_CONFIG.limits.maxMessageLength)
+  if (!ticketNumber || !message) throw new Error('Message vendeur invalide.')
+  // Ne pas exposer l’identité ou l’adresse du compte Access au client.
+  const authorLabel = 'Vendeur'
+  const createdAt = new Date().toISOString()
+  if (!env.DB) {
+    if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
+    const record = memoryTickets.get(ticketNumber)
+    if (!record) throw new Error('Ticket introuvable.')
+    record.history.push({ author: 'vendor', automated: false, authorLabel, createdAt, body: message })
+    if (record.status !== 'RÉSOLU') record.status = 'EN ATTENTE CLIENT'
+    record.updatedAt = createdAt
+    queueVendorReplyEmail(ctx, env, record, message)
+    return { ticket: publicTicket(record) }
+  }
+  const row = await adminTicketRow(ticketNumber, env)
+  if (!row) throw new Error('Ticket introuvable.')
+  const record = recordFromRow(row)
+  record.history.push({ author: 'vendor', automated: false, authorLabel, createdAt, body: message })
+  const status = record.status === 'RÉSOLU' ? record.status : 'EN ATTENTE CLIENT'
+  await env.DB.prepare('UPDATE tickets SET history_json = ?, status = ?, updated_at = ? WHERE ticket_number = ?').bind(JSON.stringify(record.history), status, createdAt, ticketNumber).run()
+  record.status = status
+  record.updatedAt = createdAt
+  queueVendorReplyEmail(ctx, env, record, message)
+  return { ticket: publicTicket(record) }
+}
+
+async function updateAdminOrderStatus(payload, env, ctx) {
+  const ticketNumber = cleanText(payload?.ticketNumber, 40)
+  const orderStatus = cleanText(payload?.orderStatus, 50)
+  if (!ticketNumber || !ALLOWED_ORDER_STATUSES.has(orderStatus)) throw new Error('Statut de commande invalide.')
+  if (!env.DB) {
+    if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
+    const record = memoryTickets.get(ticketNumber)
+    if (!record?.orderNumber) throw new Error('Commande introuvable.')
+    if (record.orderStatus !== orderStatus) {
+      record.orderStatus = orderStatus
+      record.updatedAt = new Date().toISOString()
+      queueOrderStatusEmail(ctx, env, record, orderStatus)
+    }
+    return { ticket: publicTicket(record) }
+  }
+  const row = await adminTicketRow(ticketNumber, env)
+  if (!row?.order_id) throw new Error('Commande introuvable.')
+  const currentStatus = row.order_status || 'EN PRÉPARATION'
+  const updatedAt = new Date().toISOString()
+  await env.DB.prepare('UPDATE orders SET order_status = ? WHERE id = ?').bind(orderStatus, row.order_id).run()
+  const record = recordFromRow({ ...row, order_status: orderStatus })
+  record.updatedAt = updatedAt
+  if (currentStatus !== orderStatus) queueOrderStatusEmail(ctx, env, record, orderStatus)
+  return { ticket: publicTicket(record) }
+}
+
+async function getAdminProof(payload, env, request) {
+  const ticketNumber = cleanText(payload?.ticketNumber, 40)
+  if (!ticketNumber || !env.PAYMENT_PROOFS) throw new Error('Preuve de paiement introuvable.')
+  const row = await adminTicketRow(ticketNumber, env)
+  if (!row) throw new Error('Ticket introuvable.')
+  const proof = JSON.parse(row.proof_json || 'null')
+  if (!proof?.storageKey) throw new Error('Preuve de paiement introuvable.')
+  const object = await env.PAYMENT_PROOFS.get(proof.storageKey)
+  if (!object) throw new Error('Preuve de paiement introuvable.')
+  const headers = corsHeaders(request, env)
+  headers['Content-Type'] = proof.mimeType || object.httpMetadata?.contentType || 'application/octet-stream'
+  headers['Content-Disposition'] = 'inline'
+  headers['X-Content-Type-Options'] = 'nosniff'
+  return new Response(object.body, { status: 200, headers })
+}
+
+async function handle(request, env, ctx) {
   if (!originAllowed(request, env)) return fail('Origine non autorisée.', 403, request, env)
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(request, env) })
   const url = new URL(request.url)
+  const isAdminRoute = url.pathname.startsWith('/api/admin/')
+  let adminIdentity = null
+  if (isAdminRoute) {
+    if (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUDIENCE) return fail('Cloudflare Access admin n’est pas configuré.', 503, request, env)
+    adminIdentity = await verifyAdminAccess(request, env)
+    if (!adminIdentity) return fail('Accès administrateur refusé.', 403, request, env)
+  }
   if (request.method === 'GET' && url.pathname === '/api/health') return json({ ok: true, service: 'djcreeper-shop-api' }, 200, request, env)
   if (request.method === 'GET' && url.pathname === '/api/shop/catalog') return json({ products: SHOP_CONFIG.products, preorderNotice: SHOP_CONFIG.preorderNotice, storeStatus: SHOP_CONFIG.storeStatus, shipping: { provider: SHOP_CONFIG.shipping.provider, mode: SHOP_CONFIG.shipping.mode }, loyalty: SHOP_CONFIG.loyalty }, 200, request, env)
   if (request.method === 'GET' && url.pathname.startsWith('/api/tickets/')) return fail('Accès privé requis.', 404, request, env)
   if (request.method !== 'POST') return fail('Méthode non autorisée.', 405, request, env)
+  if (url.pathname === '/api/admin/tickets/list') {
+    const payload = await readJson(request)
+    return json(await listAdminTickets(payload, env), 200, request, env)
+  }
+  if (url.pathname === '/api/admin/status') {
+    return json({ sellerStatus: WORKER_CONFIG.sellerStatus, storeStatus: SHOP_CONFIG.storeStatus, emailConfigured: String(env.EMAIL_PROVIDER || '').toLowerCase() === 'resend' && Boolean(env.EMAIL_API_KEY && env.EMAIL_FROM) }, 200, request, env)
+  }
+  if (url.pathname === '/api/admin/tickets/detail') {
+    const payload = await readJson(request)
+    return json(await getAdminTicket(payload, env), 200, request, env)
+  }
+  if (url.pathname === '/api/admin/tickets/status') {
+    const payload = await readJson(request)
+    return json(await updateAdminStatus(payload, env), 200, request, env)
+  }
+  if (url.pathname === '/api/admin/tickets/payment-status') {
+    const payload = await readJson(request)
+    return json(await updateAdminPaymentStatus(payload, env), 200, request, env)
+  }
+  if (url.pathname === '/api/admin/orders/status') {
+    const payload = await readJson(request)
+    return json(await updateAdminOrderStatus(payload, env, ctx), 200, request, env)
+  }
+  if (url.pathname === '/api/admin/tickets/messages') {
+    if (!await rateLimit(request, env, 'admin-messages', 60, 60 * 60 * 1000)) return fail('Trop de messages vendeur. Réessaie plus tard.', 429, request, env)
+    const payload = await readJson(request)
+    return json(await appendAdminMessage(payload, env, adminIdentity, ctx), 200, request, env)
+  }
+  if (url.pathname === '/api/admin/tickets/proof') {
+    const payload = await readJson(request)
+    return getAdminProof(payload, env, request)
+  }
   if (url.pathname === '/api/orders') {
     if (!await rateLimit(request, env, 'orders', 5, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
     const payload = await readJson(request)
     if (!await verifyTurnstile(request, env, payload.turnstileToken)) return fail('Vérification anti-spam requise.', 400, request, env)
-    return json(await createOrderRecord(payload, env), 201, request, env)
+    return json(await createOrderRecord(payload, env, ctx), 201, request, env)
   }
   if (url.pathname === '/api/support/tickets') {
     if (!await rateLimit(request, env, 'support', 5, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
     const payload = await readJson(request)
     if (!await verifyTurnstile(request, env, payload.turnstileToken)) return fail('Vérification anti-spam requise.', 400, request, env)
-    return json(await createSupportRecord(payload, env), 201, request, env)
+    return json(await createSupportRecord(payload, env, ctx), 201, request, env)
   }
   if (url.pathname === '/api/tickets/view') {
     if (!await rateLimit(request, env, 'ticket-view', 20, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
@@ -420,11 +732,11 @@ async function handle(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
-      return await handle(request, env)
+      return await handle(request, env, ctx)
     } catch (error) {
-      const known = ['JSON invalide.', 'Requête trop volumineuse.', 'Capture trop volumineuse.', 'Format de capture refusé.', 'Signature de fichier image invalide.', 'Capture de paiement invalide.', 'Point Relais invalide.', 'Informations client invalides.', 'Panier vide.', 'Produit ou quantité invalide.', 'Code promo invalide pour ce panier.', 'Le consentement est obligatoire.', 'Le paiement de test est réservé au produit Test.', 'Mode de paiement invalide.', 'Message invalide.', 'Ticket introuvable.', 'Informations de ticket invalides.', 'Le stockage Cloudflare non configuré.', 'Le stockage des preuves de paiement n’est pas configuré.', 'Le quota R2 nécessite le stockage D1.', 'Quota R2 dépassé.', 'Impossible de stocker la preuve de paiement.']
+      const known = ['JSON invalide.', 'Requête trop volumineuse.', 'Capture trop volumineuse.', 'Format de capture refusé.', 'Signature de fichier image invalide.', 'Capture de paiement invalide.', 'Point Relais invalide.', 'Informations client invalides.', 'Panier vide.', 'Produit ou quantité invalide.', 'Code promo invalide pour ce panier.', 'Le consentement est obligatoire.', 'Le paiement de test est réservé au produit Test.', 'Mode de paiement invalide.', 'Message invalide.', 'Message vendeur invalide.', 'Ticket introuvable.', 'Informations de ticket invalides.', 'Statut de ticket invalide.', 'Statut de paiement invalide.', 'Statut de commande invalide.', 'Commande introuvable.', 'Preuve de paiement introuvable.', 'Configuration e-mail incomplète.', 'Le stockage Cloudflare non configuré.', 'Le stockage des preuves de paiement n’est pas configuré.', 'Le quota R2 nécessite le stockage D1.', 'Quota R2 dépassé.', 'Impossible de stocker la preuve de paiement.']
       const message = known.includes(error?.message) ? error.message : 'Impossible de traiter la demande pour le moment.'
       const status = message === 'Ticket introuvable.' ? 404 : message === 'Quota R2 dépassé.' ? 507 : message.includes('trop volumineuse') ? 413 : 400
       return fail(message, status, request, env)

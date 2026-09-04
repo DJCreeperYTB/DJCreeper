@@ -34,7 +34,7 @@
     </section>
 
     <div class="shop-toolbar">
-      <p><span id="shop-seller-status" class="seller-status available">Vendeur disponible</span> · Réponse via ticket sécurisé</p>
+      <p>Réponse via ticket sécurisé</p>
       <button id="open-cart" class="btn secondary" type="button" aria-controls="shop-cart">Ouvrir le panier <span class="shop-cart-count" id="shop-cart-count-top" aria-label="0 article">0</span></button>
     </div>
 
@@ -144,7 +144,7 @@
     <section class="support-section" aria-labelledby="support-title">
       <div class="section-heading"><div><p class="eyebrow">Assistance</p><h2 id="support-title">SERVICE CLIENT</h2></div><span class="sync-status">Un ticket peut être créé sans commande</span></div>
       <div class="support-grid">
-        <aside class="card support-status-card"><p class="card-kicker cyan">Présence vendeur</p><h3 id="support-seller-label">Vendeur disponible</h3><p>Le statut affiché vient de la configuration publique. Il ne révèle aucune adresse ni connexion directe à un ordinateur.</p><div class="alert">Pour retrouver un ticket plus tard, le futur Worker remettra un jeton d’accès privé à la création. Le numéro seul ne permettra jamais de consulter un ticket.</div></aside>
+        <aside class="card support-status-card"><p class="card-kicker cyan">Support sécurisé</p><h3>Une question ? Ouvre un ticket.</h3><p>Ta demande sera transmise au service client via un canal sécurisé, sans exposer d’adresse ni de connexion directe.</p><div class="alert">Pour retrouver un ticket plus tard, conserve son numéro et sa clé d’accès privée. Le numéro seul ne permet jamais de consulter une conversation.</div></aside>
         <div class="card">
           <h3>Créer un ticket</h3><p class="muted">Une question avant achat ou un problème peut être envoyé sans passer de commande.</p>
           <form id="support-form" novalidate>
@@ -166,6 +166,7 @@
       <dl class="ticket-meta">
         <div><dt>Client</dt><dd id="ticket-customer">—</dd></div>
         <div><dt>Commande</dt><dd id="ticket-order-number">Sans commande</dd></div>
+        <div><dt>État de la commande</dt><dd id="ticket-order-status">Non concerné</dd></div>
         <div><dt>Créé le</dt><dd id="ticket-created-at">—</dd></div>
         <div><dt>Paiement</dt><dd id="ticket-payment-status">À VÉRIFIER</dd></div>
         <div><dt>Point Relais / Locker</dt><dd id="ticket-relay">Non concerné</dd></div>

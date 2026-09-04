@@ -68,14 +68,6 @@ api: Object.freeze({
       })
     ])
   }),
-  sellerStatus: Object.freeze({
-    mode: 'available',
-    labels: Object.freeze({
-      available: 'Vendeur disponible',
-      busy: 'Vendeur occupé',
-      unavailable: 'Aucun vendeur disponible'
-    })
-  }),
   promoCodes: Object.freeze({
     MPD226: Object.freeze({
       code: 'MPD226',
@@ -104,7 +96,8 @@ api: Object.freeze({
       type: 'test',
       price: 100000,
       weight: 0,
-      image: '',
+      image: 'assets/CD-TEST-1.png',
+      images: Object.freeze(['assets/CD-TEST-1.png', 'assets/CD-TEST-2.png', 'assets/CD-TEST-3.png']),
       description: 'Produit utilisé uniquement pour tester le fonctionnement de la boutique.',
       available: true,
       preorder: false,
