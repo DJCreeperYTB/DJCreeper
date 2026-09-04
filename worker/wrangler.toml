@@ -1,0 +1,22 @@
+name = "djcreeper-shop-api"
+main = "src/index.js"
+compatibility_date = "2026-09-04"
+
+# PUBLIC_ORIGIN reste volontairement inchangé jusqu’à réception du domaine
+# Cloudflare Pages. ALLOW_LOCAL_DEMO doit rester désactivé en production.
+[vars]
+PUBLIC_ORIGIN = "https://djcreeper.pages.dev"
+ALLOW_LOCAL_DEMO = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "djcreeper-shop"
+database_id = "8563e4ea-e26d-4c72-a935-2f02e4a025d9"
+
+[[r2_buckets]]
+binding = "PAYMENT_PROOFS"
+bucket_name = "djcreeper-payment-proofs"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "47790d1ef4594c2ea6a713bca24fad24"

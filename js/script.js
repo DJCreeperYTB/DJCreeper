@@ -51,7 +51,15 @@ function initDonations() {
       if (!dons.length) list.innerHTML = '<tr><td colspan="3" class="muted">Aucun don enregistré pour le moment.</td></tr>'
       dons.slice().reverse().forEach(donation => {
         const row = document.createElement('tr')
-        row.innerHTML = `<td>${donation.name}</td><td>${new Date(donation.date).toLocaleDateString('fr-FR')}</td><td><strong>${euro(donation.amount)}</strong></td>`
+        const nameCell = document.createElement('td')
+        nameCell.textContent = String(donation.name || 'Anonyme').slice(0, 80)
+        const dateCell = document.createElement('td')
+        dateCell.textContent = new Date(donation.date).toLocaleDateString('fr-FR')
+        const amountCell = document.createElement('td')
+        const amount = document.createElement('strong')
+        amount.textContent = euro(donation.amount)
+        amountCell.appendChild(amount)
+        row.append(nameCell, dateCell, amountCell)
         list.appendChild(row)
       })
     }
@@ -61,7 +69,11 @@ function initDonations() {
       if (!boosts.length) boostList.innerHTML = '<tr><td colspan="2" class="muted">Aucun boost enregistré.</td></tr>'
       boosts.slice().reverse().forEach(boost => {
         const row = document.createElement('tr')
-        row.innerHTML = `<td>${boost.name}</td><td>${new Date(boost.date).toLocaleDateString('fr-FR')}</td>`
+        const nameCell = document.createElement('td')
+        nameCell.textContent = String(boost.name || 'Anonyme').slice(0, 80)
+        const dateCell = document.createElement('td')
+        dateCell.textContent = new Date(boost.date).toLocaleDateString('fr-FR')
+        row.append(nameCell, dateCell)
         boostList.appendChild(row)
       })
     }

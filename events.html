@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Les annonces et rendez-vous de la communauté DJCreeper.">
 <title>DJCreeper — Événements</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
@@ -13,7 +14,7 @@
       <div class="brand"><a href="index.html"><img src="assets/logo.png" alt="Logo DJCreeper"></a><div class="brand-title">DJCreeper</div></div>
       <button class="menu-btn" type="button" aria-label="Ouvrir le menu" aria-expanded="false">☰ Menu</button>
       <nav class="navlinks" aria-label="Navigation principale">
-        <a href="index.html">Accueil</a><a href="wiki.html">Wiki</a><a href="portfolio.html">Portfolio</a><a href="reglement.html">Règlement</a><a href="team.html">Team Creeper</a><a href="events.html">Événements</a><a href="shop.html">Shop</a><a href="dons.html">Don</a>
+        <a href="index.html">Accueil</a><a href="wiki.html">Wiki</a><a href="portfolio.html">Portfolio</a><a href="reglement.html">Règlement</a><a href="team.html">Team Creeper</a><a href="events.html" aria-current="page">Événements</a><a href="shop.html">Shop</a><a href="dons.html">Don</a>
       </nav>
     </div>
   </header>
@@ -24,10 +25,13 @@
     <p class="muted">Les rendez-vous confirmés apparaîtront ici avec leurs informations utiles.</p>
     <div class="space-lg"></div>
 
-    <section class="card event-status-card" aria-live="polite">
-      <span class="signal-label">Statut actuel</span>
-      <h2>Aucun événement en cours</h2>
-      <p>Il n’y a actuellement aucun événement actif à rejoindre. Les prochains rendez-vous confirmés seront ajoutés à cette page.</p>
+    <section class="card event-status-card" aria-labelledby="cd-preorders-title">
+      <span class="signal-label">Annonce · bientôt</span>
+      <div class="badges"><span class="badge">BIENTÔT</span></div>
+      <h2 id="cd-preorders-title">Précommandes de CD bientôt disponibles</h2>
+      <p>Les premières éditions physiques des Singles, EP et Albums de DJCreeper arrivent bientôt.</p>
+      <div class="space"></div>
+      <a class="btn secondary" href="shop.html">Découvrir la boutique</a>
     </section>
   </main>
 

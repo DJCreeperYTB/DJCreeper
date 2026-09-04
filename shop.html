@@ -6,6 +6,7 @@
 <title>DJCreeper — Shop</title>
 <link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/shop.css">
 </head>
 <body>
   <header class="header">
@@ -18,25 +19,188 @@
     </div>
   </header>
 
-  <main class="container">
-    <p class="eyebrow">Objets de la communauté</p>
-    <h1>Shop</h1>
-    <p class="muted">Retrouve les produits officiels DJCreeper et les nouveautés disponibles.</p>
-    <div class="space-lg"></div>
-    <div class="alert good">La boutique officielle reste disponible en ligne. Les vêtements Creeper Games 1 et 2 ont été retirés le 11 août 2026.</div>
-    <div class="space-lg"></div>
-
-    <section class="grid grid-3">
-      <article class="card product"><div class="thumb"><img src="./assets/Pullover.jpg" alt="Pull DJCreeper"></div><div><h3>Pullover</h3><p class="muted">Confort &amp; style DJCreeper.</p></div></article>
-      <article class="card product"><div class="thumb"><img src="./assets/Mug.jpg" alt="Mug DJCreeper"></div><div><h3>Mug</h3><p class="muted">Parfait pour ton café quotidien.</p></div></article>
-      <article class="card product"><div class="thumb"><img src="./assets/Tee.jpg" alt="Tee DJCreeper"></div><div><h3>Tee</h3><p class="muted">T-shirt officiel DJCreeper.</p></div></article>
+  <main class="container shop-page">
+    <section class="shop-hero" aria-labelledby="shop-title">
+      <div class="hero-card shop-hero-copy">
+        <div class="pill"><span class="dot"></span> Boutique DJCreeper · préparation</div>
+        <h1 id="shop-title">Précommandes de CD bientôt disponibles</h1>
+        <p id="shop-preorder-text">Les éditions physiques des Singles, EP et Albums de DJCreeper seront bientôt disponibles en précommande. Chaque CD sera fabriqué à la demande.</p>
+      </div>
+      <aside class="signal-card shop-status-card" aria-label="Statut de la boutique">
+        <span id="shop-status-label" class="signal-label">Statut de la boutique</span>
+        <h2 id="shop-status-title">Fabrication à la demande</h2>
+        <p id="shop-status-text">Les vrais CD seront ajoutés progressivement, avec leurs prix, poids et disponibilités depuis la configuration centrale.</p>
+      </aside>
     </section>
 
-    <div class="achat-container"><strong>Voir tous les produits</strong><p>La sélection complète est disponible sur la boutique officielle.</p><a class="btn" href="https://djcreeper.creator-spring.com" target="_blank" rel="noopener">Ouvrir le merch</a></div>
+    <div class="shop-toolbar">
+      <p><span id="shop-seller-status" class="seller-status available">Vendeur disponible</span> · Réponse via ticket sécurisé</p>
+      <button id="open-cart" class="btn secondary" type="button" aria-controls="shop-cart">Ouvrir le panier <span class="shop-cart-count" id="shop-cart-count-top" aria-label="0 article">0</span></button>
+    </div>
+
+    <div id="shop-preorder-alert" class="alert good" role="status">Les précommandes de CD arrivent bientôt. Le produit visible ci-dessous est uniquement un produit de test.</div>
+    <div id="test-mode-banner" class="test-mode-banner" role="status" hidden>Mode commande de test activé · aucun paiement réel ne sera demandé.</div>
+
+    <section class="shop-layout section-block" aria-label="Boutique et panier">
+      <div class="shop-catalog">
+        <div class="section-heading">
+          <div><p class="eyebrow">Catalogue préparatoire</p><h2>Produits disponibles</h2></div>
+          <span class="sync-status is-ready">Configuration locale</span>
+        </div>
+        <div id="shop-products" class="shop-product-grid" aria-live="polite"></div>
+
+        <section class="external-merch section-block" aria-labelledby="external-merch-title">
+          <div class="section-heading"><div><p class="eyebrow">Merch existant</p><h2 id="external-merch-title">Vêtements &amp; accessoires</h2></div></div>
+          <div class="external-merch-grid">
+            <article class="card product"><div class="thumb"><img src="./assets/Pullover.jpg" alt="Pull DJCreeper" loading="lazy"></div><div><h3>Pullover</h3><p>Confort &amp; style DJCreeper.</p></div></article>
+            <article class="card product"><div class="thumb"><img src="./assets/Mug.jpg" alt="Mug DJCreeper" loading="lazy"></div><div><h3>Mug</h3><p>Parfait pour ton café quotidien.</p></div></article>
+            <article class="card product"><div class="thumb"><img src="./assets/Tee.jpg" alt="Tee DJCreeper" loading="lazy"></div><div><h3>Tee</h3><p>T-shirt officiel DJCreeper.</p></div></article>
+          </div>
+          <div class="achat-container"><strong>Voir tous les produits</strong><p>La sélection textile complète est disponible sur la boutique officielle.</p><a class="btn" href="https://djcreeper.creator-spring.com" target="_blank" rel="noopener">Ouvrir le merch</a></div>
+        </section>
+      </div>
+
+      <aside id="shop-cart" class="card shop-cart" aria-labelledby="cart-title">
+        <div class="shop-cart-header"><h2 id="cart-title" tabindex="-1">Ton panier <span class="shop-cart-count" id="shop-cart-count" aria-hidden="true">0</span></h2><span class="pill">CD DJCreeper</span></div>
+        <div id="cart-lines" class="cart-lines" aria-live="polite"></div>
+        <form id="promo-form" class="promo-form" novalidate>
+          <label for="promo-code">Code promo de test</label>
+          <input id="promo-code" class="input" name="promoCode" type="text" inputmode="text" autocomplete="off" maxlength="32" placeholder="Ex. MPD226">
+          <button class="btn secondary" type="submit">Appliquer</button>
+        </form>
+        <p id="promo-feedback" class="shop-message" role="status" aria-live="polite"></p>
+        <div id="cart-test-mode" class="test-mode-banner" hidden>Mode commande de test activé</div>
+        <div class="cart-summary" aria-label="Résumé du panier">
+          <div class="cart-summary-row"><span>Sous-total</span><strong id="cart-subtotal">0,00&nbsp;€</strong></div>
+          <div class="cart-summary-row"><span>Réductions</span><strong id="cart-discount">—</strong></div>
+          <div class="cart-summary-row"><span>Livraison</span><strong id="cart-shipping">À l’étape livraison</strong></div>
+          <div class="cart-summary-row total"><span>TOTAL À PAYER</span><strong id="cart-total">0,00&nbsp;€</strong></div>
+        </div>
+        <button id="checkout-start" class="btn" type="button" disabled>VALIDER MON PANIER</button>
+        <p class="field-help">Le panier seul est conservé temporairement dans ce navigateur. Les informations client et tickets ne le sont jamais.</p>
+      </aside>
+    </section>
+
+    <section id="checkout" class="card checkout-shell" aria-labelledby="checkout-title" hidden>
+      <div class="checkout-heading"><div><p class="eyebrow">Parcours sécurisé</p><h2 id="checkout-title">Finaliser la commande</h2><p>Les étapes restent visibles pour savoir où tu en es.</p></div><span class="badge">MODE TEST disponible</span></div>
+      <ol id="checkout-steps" class="checkout-steps" aria-label="Progression du checkout">
+        <li class="checkout-step" data-step="1" data-label="Panier">Panier</li>
+        <li class="checkout-step" data-step="2" data-label="Informations">Informations</li>
+        <li class="checkout-step" data-step="3" data-label="Livraison">Livraison</li>
+        <li class="checkout-step" data-step="4" data-label="Paiement">Paiement</li>
+        <li class="checkout-step" data-step="5" data-label="Confirmation">Confirmation</li>
+      </ol>
+
+      <div class="checkout-panel" data-checkout-panel="1" hidden>
+        <h3>Récapitulatif du panier</h3><p class="checkout-panel-intro">Vérifie les articles avant de saisir tes informations.</p>
+        <div id="checkout-cart-review" class="payment-summary"></div>
+        <div class="checkout-actions"><button class="btn checkout-next" type="button" data-go-step="2">Continuer vers les informations</button></div>
+      </div>
+
+      <div class="checkout-panel" data-checkout-panel="2" hidden>
+        <h3>Informations client</h3><p class="checkout-panel-intro">Ces informations sont transmises uniquement pour traiter cette commande.</p>
+        <form id="customer-form" novalidate>
+          <div class="form-grid">
+            <div class="form-field"><label class="label" for="customer-last-name">Nom *</label><input class="input" id="customer-last-name" name="lastName" type="text" autocomplete="family-name" maxlength="80" required></div>
+            <div class="form-field"><label class="label" for="customer-first-name">Prénom *</label><input class="input" id="customer-first-name" name="firstName" type="text" autocomplete="given-name" maxlength="80" required></div>
+            <div class="form-field"><label class="label" for="customer-email">Adresse e-mail *</label><input class="input" id="customer-email" name="email" type="email" autocomplete="email" maxlength="254" required aria-describedby="customer-email-help"><p id="customer-email-help" class="field-help">Elle servira à rattacher et suivre la demande.</p></div>
+            <div class="form-field"><label class="label" for="customer-phone">Téléphone <span class="muted">(facultatif)</span></label><input class="input" id="customer-phone" name="phone" type="tel" autocomplete="tel" maxlength="30" aria-describedby="customer-phone-help"><p id="customer-phone-help" class="field-help">Demandé seulement si le transporteur le rend nécessaire.</p></div>
+          </div>
+          <label class="checkline" for="customer-consent"><input id="customer-consent" name="consent" type="checkbox" required><span>J’accepte que mes informations soient utilisées pour traiter ma commande. Les CGV et la politique de confidentialité pourront être ajoutées ici avant l’ouverture des précommandes.</span></label>
+          <p id="customer-feedback" class="shop-message" role="alert" aria-live="assertive"></p>
+          <div class="checkout-actions"><button class="btn ghost" type="button" data-go-step="1">Retour au panier</button><button class="btn checkout-next" type="submit">Continuer vers la livraison</button></div>
+        </form>
+      </div>
+
+      <div class="checkout-panel" data-checkout-panel="3" hidden>
+        <h3>Choisir mon Point Relais / Locker</h3><p class="checkout-panel-intro">Recherche une adresse ou un code postal. Les résultats actuels sont des données de démonstration clairement identifiées.</p>
+        <div class="alert warn">MODE TEST · adaptateur Mondial Relay de démonstration. Aucun appel vers une API officielle n’est effectué.</div>
+        <div class="relay-search-row"><label class="sr-only" for="relay-search">Rechercher un Point Relais ou un Locker</label><input id="relay-search" class="input" type="search" autocomplete="off" placeholder="Ville, code postal ou nom du point"><button id="relay-search-clear" class="btn ghost" type="button">Effacer</button></div>
+        <div id="relay-results" class="relay-results" aria-live="polite"></div>
+        <div id="relay-selected" class="relay-selected" hidden></div>
+        <p id="relay-feedback" class="shop-message" role="alert" aria-live="assertive"></p>
+        <div class="checkout-actions"><button class="btn ghost" type="button" data-go-step="2">Retour aux informations</button><button id="relay-next" class="btn checkout-next" type="button">Continuer vers le paiement</button></div>
+      </div>
+
+      <div class="checkout-panel" data-checkout-panel="4" hidden>
+        <h3>Paiement</h3><p class="checkout-panel-intro">Le montant est affiché avant toute ouverture de PayPal. Le site ne demande jamais de mot de passe ou de coordonnées bancaires.</p>
+        <div id="payment-summary" class="payment-summary" aria-label="Montant à payer"></div>
+        <div id="test-payment-area" class="alert good" hidden><strong>Mode commande de test activé</strong><p>Aucun paiement réel n’est nécessaire. Tu peux terminer le scénario et joindre une fausse capture facultative pour tester le traitement manuel.</p><div class="payment-choices"><button id="test-payment-submit" class="btn" type="button">PASSER L’ÉTAPE PAIEMENT EN MODE TEST</button></div></div>
+        <div id="real-payment-area" hidden>
+          <div class="payment-choices"><a id="paypal-payment" class="btn paypal-button" href="https://paypal.me/djcreeperytb" target="_blank" rel="noopener noreferrer">PAYER AVEC PAYPAL</a><a class="btn secondary" href="https://www.paypal.com/fr/cshelp/article/comment-ouvrir-un-compte-paypal%C2%A0--help315" target="_blank" rel="noopener noreferrer">Créer un compte PayPal</a></div>
+          <p class="field-help">Après ton retour depuis PayPal, indique si le paiement a été effectué.</p>
+          <div id="paypal-return-question" class="payment-choices" hidden><button id="paypal-paid" class="btn" type="button">OUI, J’AI PAYÉ</button><button id="paypal-not-paid" class="btn ghost" type="button">PAS ENCORE</button></div>
+          <p id="paypal-feedback" class="shop-message" role="status" aria-live="polite"></p>
+        </div>
+        <div id="payment-proof" class="payment-proof" hidden><label for="payment-proof-file">Capture du paiement <span class="muted">(PNG, JPG, JPEG ou WEBP · 5 Mo max.)</span></label><input id="payment-proof-file" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"><p id="payment-proof-meta" class="payment-proof-meta">La capture sera seulement marquée « paiement à vérifier » et contrôlée manuellement.</p><img id="payment-proof-preview" class="payment-proof-preview" alt="Aperçu de la capture de paiement" hidden></div>
+        <div class="checkout-actions"><button class="btn ghost" type="button" data-go-step="3">Retour au relais</button><button id="real-order-submit" class="btn" type="button" hidden>ENREGISTRER LA COMMANDE</button></div>
+      </div>
+
+      <div class="checkout-panel" data-checkout-panel="5" hidden>
+        <div id="order-confirmation" class="confirmation-box"></div>
+      </div>
+    </section>
+
+    <section class="support-section" aria-labelledby="support-title">
+      <div class="section-heading"><div><p class="eyebrow">Assistance</p><h2 id="support-title">SERVICE CLIENT</h2></div><span class="sync-status">Un ticket peut être créé sans commande</span></div>
+      <div class="support-grid">
+        <aside class="card support-status-card"><p class="card-kicker cyan">Présence vendeur</p><h3 id="support-seller-label">Vendeur disponible</h3><p>Le statut affiché vient de la configuration publique. Il ne révèle aucune adresse ni connexion directe à un ordinateur.</p><div class="alert">Pour retrouver un ticket plus tard, le futur Worker remettra un jeton d’accès privé à la création. Le numéro seul ne permettra jamais de consulter un ticket.</div></aside>
+        <div class="card">
+          <h3>Créer un ticket</h3><p class="muted">Une question avant achat ou un problème peut être envoyé sans passer de commande.</p>
+          <form id="support-form" novalidate>
+            <div class="form-grid">
+              <div class="form-field"><label class="label" for="support-email">E-mail *</label><input class="input" id="support-email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
+              <div class="form-field"><label class="label" for="support-subject">Sujet *</label><input class="input" id="support-subject" name="subject" type="text" maxlength="160" required></div>
+              <div class="form-field"><label class="label" for="support-category">Catégorie *</label><select class="input" id="support-category" name="category" required><option value="">Choisir une catégorie</option><option>Question avant achat</option><option>Commande</option><option>Paiement</option><option>Livraison</option><option>Produit</option><option>Problème technique</option><option>Autre</option></select></div>
+              <div class="form-field full"><label class="label" for="support-message">Message *</label><textarea class="input" id="support-message" name="message" maxlength="2000" required></textarea></div>
+            </div>
+            <p id="support-feedback" class="shop-message" role="alert" aria-live="assertive"></p>
+            <div class="checkout-actions"><button class="btn" type="submit">CRÉER LE TICKET</button></div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="ticket-view" class="card ticket-view" aria-labelledby="ticket-title" hidden>
+      <div class="ticket-header"><div><p class="eyebrow">Support client</p><h2 id="ticket-title">Ticket <span id="ticket-number">#DJC-000000</span></h2></div><span id="ticket-status" class="ticket-status">NOUVEAU</span></div>
+      <dl class="ticket-meta">
+        <div><dt>Client</dt><dd id="ticket-customer">—</dd></div>
+        <div><dt>Commande</dt><dd id="ticket-order-number">Sans commande</dd></div>
+        <div><dt>Créé le</dt><dd id="ticket-created-at">—</dd></div>
+        <div><dt>Paiement</dt><dd id="ticket-payment-status">À VÉRIFIER</dd></div>
+        <div><dt>Point Relais / Locker</dt><dd id="ticket-relay">Non concerné</dd></div>
+        <div><dt>Produits</dt><dd id="ticket-products">—</dd></div>
+        <div><dt>Sous-total</dt><dd id="ticket-subtotal">—</dd></div>
+        <div><dt>Réduction</dt><dd id="ticket-discount">—</dd></div>
+        <div><dt>Livraison</dt><dd id="ticket-shipping">—</dd></div>
+        <div><dt>Total</dt><dd id="ticket-total">—</dd></div>
+        <div><dt>Capture du paiement</dt><dd id="ticket-proof">Aucune</dd></div>
+      </dl>
+      <div id="ticket-history" class="ticket-history" aria-live="polite"></div>
+      <form id="ticket-message-form" class="ticket-message-form" novalidate>
+        <label class="label" for="ticket-message-input">Nouveau message</label>
+        <textarea id="ticket-message-input" class="input" name="message" maxlength="2000" required placeholder="Écris ton message…"></textarea>
+        <button class="btn" type="submit">ENVOYER LE MESSAGE</button>
+      </form>
+      <div id="ticket-access-card" class="alert ticket-access-card" hidden><strong>Clé d’accès privée</strong><p>Conserve cette clé avec le numéro du ticket. Elle est nécessaire pour le retrouver via le Worker ; elle n’est jamais enregistrée dans le panier.</p><code id="ticket-access-token"></code><button id="copy-ticket-access" class="btn secondary" type="button">Copier la clé</button></div>
+      <p class="ticket-private-note">Cette vue est conservée dans la session actuelle. Le numéro du ticket seul ne donne pas accès à la conversation.</p>
+    </section>
+
+    <section id="ticket-recovery" class="card ticket-view" aria-labelledby="ticket-recovery-title" hidden>
+      <p class="eyebrow">Accès privé</p><h3 id="ticket-recovery-title">Retrouver un ticket</h3>
+      <p class="muted">Après configuration du Worker, renseigne le numéro et la clé privée reçue à la création. Le numéro seul ne suffit pas.</p>
+      <form id="ticket-recovery-form" class="form-grid" novalidate>
+        <div class="form-field"><label class="label" for="recovery-ticket-number">Numéro du ticket</label><input id="recovery-ticket-number" class="input" name="ticketNumber" type="text" maxlength="40" autocomplete="off" required placeholder="DJC-000001"></div>
+        <div class="form-field"><label class="label" for="recovery-access-token">Clé d’accès privée</label><input id="recovery-access-token" class="input" name="accessToken" type="password" maxlength="128" autocomplete="off" required></div>
+        <div class="form-field full"><p id="ticket-recovery-feedback" class="shop-message" role="alert" aria-live="assertive"></p></div>
+        <div class="form-field full"><button class="btn" type="submit">RETROUVER LE TICKET</button></div>
+      </form>
+    </section>
   </main>
 
   <footer class="footer"><div class="container cols"><div><strong>DJCreeper</strong><small>© <span id="year"></span> — Tous droits réservés</small></div><div><small><a href="index.html">Accueil</a></small></div><div><small><a href="dons.html">Soutenir</a></small></div></div></footer>
   <script src="js/script.js"></script>
+  <script type="module" src="js/shop.js"></script>
   <script>document.getElementById('year').textContent = new Date().getFullYear()</script>
 </body>
 </html>
