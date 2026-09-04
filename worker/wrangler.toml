@@ -13,8 +13,8 @@ ALLOW_LOCAL_DEMO = "false"
 
 # Paramètres publics de vérification Cloudflare Access pour les routes /api/admin/*.
 # À renseigner après création de l’application Access ; aucun token n’est à mettre ici.
-# CF_ACCESS_TEAM_DOMAIN = "https://TON-EQUIPE.cloudflareaccess.com"
-# CF_ACCESS_AUDIENCE = "AUDIENCE_DE_L_APPLICATION_ACCESS"
+CF_ACCESS_TEAM_DOMAIN = "https://blue-forest-bdfe.cloudflareaccess.com"
+CF_ACCESS_AUDIENCE = "b0f17e1ca75d0d287336b9d4e9002bceaef2e2984231198712fce3b31a4064fb"
 # EMAIL_PROVIDER = "resend"
 # EMAIL_FROM = "DJCreeper <support@ton-domaine.fr>"
 # EMAIL_REPLY_TO = "support@ton-domaine.fr"
