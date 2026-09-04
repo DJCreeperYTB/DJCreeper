@@ -38,6 +38,36 @@
       <button id="open-cart" class="btn secondary" type="button" aria-controls="shop-cart">Ouvrir le panier <span class="shop-cart-count" id="shop-cart-count-top" aria-label="0 article">0</span></button>
     </div>
 
+    <section id="shop-account" class="card shop-account" aria-labelledby="shop-account-title">
+      <div id="account-logged-out">
+        <p class="eyebrow">Compte client</p>
+        <h2 id="shop-account-title">Gagne des points sur tes achats</h2>
+        <p class="muted">Connecte-toi avec Google pour retrouver tes commandes et tickets, et gagner des points de fidélité. Les achats invités restent possibles.</p>
+        <div id="google-signin" class="google-signin" aria-label="Connexion Google"></div>
+        <button id="google-signin-fallback" class="btn secondary" type="button">SE CONNECTER AVEC GOOGLE</button>
+        <p id="google-auth-feedback" class="shop-message" role="status" aria-live="polite"></p>
+      </div>
+      <div id="account-logged-in" hidden>
+        <div class="account-identity">
+          <img id="account-avatar" class="account-avatar" alt="" hidden>
+          <div><p class="eyebrow">Compte connecté</p><h2 id="account-name">DJCreeper</h2><p id="account-email" class="muted"></p></div>
+        </div>
+        <div class="account-points"><span>⭐</span><strong id="account-points">0 points</strong><span id="account-points-value" class="muted">Valeur disponible : 0,00&nbsp;€</span></div>
+        <div class="account-actions"><button id="open-account" class="btn secondary" type="button">MON COMPTE</button><button id="logout-account" class="btn ghost" type="button">SE DÉCONNECTER</button></div>
+        <p id="account-feedback" class="shop-message" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="account-panel" class="card account-panel" aria-labelledby="account-panel-title" hidden>
+      <div class="section-heading"><div><p class="eyebrow">Espace personnel</p><h2 id="account-panel-title">Mon compte</h2></div><button id="close-account" class="btn ghost" type="button">Fermer</button></div>
+      <div id="account-overview" class="account-overview"></div>
+      <div class="account-columns">
+        <section><h3>Mes commandes</h3><div id="account-orders" class="account-list" aria-live="polite"></div></section>
+        <section><h3>Mes tickets</h3><div id="account-tickets" class="account-list" aria-live="polite"></div></section>
+      </div>
+      <section><h3>Historique des points</h3><div id="account-loyalty-history" class="account-list" aria-live="polite"></div></section>
+    </section>
+
     <div id="shop-preorder-alert" class="alert good" role="status">Les précommandes de CD arrivent bientôt. Le produit visible ci-dessous est uniquement un produit de test.</div>
     <div id="test-mode-banner" class="test-mode-banner" role="status" hidden>Mode commande de test activé · aucun paiement réel ne sera demandé.</div>
 
@@ -94,6 +124,13 @@
       <div class="checkout-panel" data-checkout-panel="1" hidden>
         <h3>Récapitulatif du panier</h3><p class="checkout-panel-intro">Vérifie les articles avant de saisir tes informations.</p>
         <div id="checkout-cart-review" class="payment-summary"></div>
+        <div id="checkout-loyalty" class="checkout-loyalty" hidden>
+          <strong id="checkout-loyalty-balance">⭐ 0 points disponibles</strong>
+          <label class="checkline" for="use-loyalty"><input id="use-loyalty" type="checkbox"><span>Utiliser mes points</span></label>
+          <label class="label" for="loyalty-points">Nombre de points à utiliser</label>
+          <input id="loyalty-points" class="input" type="number" min="0" step="10" value="0" inputmode="numeric">
+          <p id="loyalty-feedback" class="field-help">Les frais de livraison ne peuvent jamais être payés avec des points.</p>
+        </div>
         <div class="checkout-actions"><button class="btn checkout-next" type="button" data-go-step="2">Continuer vers les informations</button></div>
       </div>
 
@@ -175,6 +212,7 @@
         <div><dt>Réduction</dt><dd id="ticket-discount">—</dd></div>
         <div><dt>Livraison</dt><dd id="ticket-shipping">—</dd></div>
         <div><dt>Total</dt><dd id="ticket-total">—</dd></div>
+        <div><dt>Points fidélité</dt><dd id="ticket-loyalty">Non concerné</dd></div>
         <div><dt>Capture du paiement</dt><dd id="ticket-proof">Aucune</dd></div>
       </dl>
       <div id="ticket-history" class="ticket-history" aria-live="polite"></div>
@@ -183,24 +221,15 @@
         <textarea id="ticket-message-input" class="input" name="message" maxlength="2000" required placeholder="Écris ton message…"></textarea>
         <button class="btn" type="submit">ENVOYER LE MESSAGE</button>
       </form>
-      <div id="ticket-access-card" class="alert ticket-access-card" hidden><strong>Clé d’accès privée</strong><p>Conserve cette clé avec le numéro du ticket. Elle est nécessaire pour le retrouver via le Worker ; elle n’est jamais enregistrée dans le panier.</p><code id="ticket-access-token"></code><button id="copy-ticket-access" class="btn secondary" type="button">Copier la clé</button></div>
+      <div id="ticket-access-card" class="alert ticket-access-card" hidden><strong>Clé d’accès privée</strong><p>Conserve cette clé avec le numéro du ticket. Elle est nécessaire pour le retrouver via le Worker ; elle n’est jamais enregistrée dans le panier.</p><code id="ticket-access-token"></code><button id="copy-ticket-access" class="btn secondary" type="button">Copier la clé</button><p id="ticket-access-feedback" class="shop-message" role="status" aria-live="polite"></p></div>
       <p class="ticket-private-note">Cette vue est conservée dans la session actuelle. Le numéro du ticket seul ne donne pas accès à la conversation.</p>
     </section>
 
-    <section id="ticket-recovery" class="card ticket-view" aria-labelledby="ticket-recovery-title" hidden>
-      <p class="eyebrow">Accès privé</p><h3 id="ticket-recovery-title">Retrouver un ticket</h3>
-      <p class="muted">Après configuration du Worker, renseigne le numéro et la clé privée reçue à la création. Le numéro seul ne suffit pas.</p>
-      <form id="ticket-recovery-form" class="form-grid" novalidate>
-        <div class="form-field"><label class="label" for="recovery-ticket-number">Numéro du ticket</label><input id="recovery-ticket-number" class="input" name="ticketNumber" type="text" maxlength="40" autocomplete="off" required placeholder="DJC-000001"></div>
-        <div class="form-field"><label class="label" for="recovery-access-token">Clé d’accès privée</label><input id="recovery-access-token" class="input" name="accessToken" type="password" maxlength="128" autocomplete="off" required></div>
-        <div class="form-field full"><p id="ticket-recovery-feedback" class="shop-message" role="alert" aria-live="assertive"></p></div>
-        <div class="form-field full"><button class="btn" type="submit">RETROUVER LE TICKET</button></div>
-      </form>
-    </section>
   </main>
 
   <footer class="footer"><div class="container cols"><div><strong>DJCreeper</strong><small>© <span id="year"></span> — Tous droits réservés</small></div><div><small><a href="index.html">Accueil</a></small></div><div><small><a href="dons.html">Soutenir</a></small></div></div></footer>
   <script src="js/script.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="module" src="js/shop.js"></script>
   <script>document.getElementById('year').textContent = new Date().getFullYear()</script>
 </body>

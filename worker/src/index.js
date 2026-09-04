@@ -6,15 +6,20 @@ import { queueTransactionalEmail } from './email-adapter.js'
 const memoryTickets = new Map()
 const memoryCounters = { ticket: 0, order: 0 }
 const memoryRateLimits = new Map()
+const memoryGoogleChallenges = new Map()
 const ALLOWED_CATEGORIES = new Set(['Question avant achat', 'Commande', 'Paiement', 'Livraison', 'Produit', 'Problème technique', 'Autre'])
 const ALLOWED_TICKET_STATUSES = new Set(['NOUVEAU', 'EN COURS', 'EN ATTENTE CLIENT', 'EN ATTENTE VENDEUR', 'RÉSOLU'])
 const ALLOWED_PAYMENT_STATUSES = new Set(['À VÉRIFIER', 'PAYÉ', 'REFUSÉ'])
 const ALLOWED_ORDER_STATUSES = new Set(['EN PRÉPARATION', 'PRÊTE À EXPÉDIER', 'EXPÉDIÉE', 'EN TRANSIT', 'LIVRÉE', 'ANNULÉE'])
 const MAX_JSON_BYTES = 10 * 1024 * 1024
 let accessCertificatesCache = { issuer: '', expiresAt: 0, keys: [] }
+let googleCertificatesCache = { expiresAt: 0, keys: [] }
 
 function configuredOrigins(env) {
-  return String(env.PUBLIC_ORIGIN || '').split(',').map(value => value.trim()).filter(Boolean)
+  return [env.PUBLIC_ORIGIN, env.ADMIN_ORIGINS]
+    .flatMap(value => String(value || '').split(','))
+    .map(value => value.trim())
+    .filter(Boolean)
 }
 
 function originAllowed(request, env) {
@@ -27,7 +32,7 @@ function originAllowed(request, env) {
 function corsHeaders(request, env) {
   const origin = request.headers.get('Origin')
   const headers = {
-    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Headers': 'content-type, x-csrf-token',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
@@ -41,6 +46,12 @@ function corsHeaders(request, env) {
 
 function json(data, status, request, env) {
   return new Response(JSON.stringify(data), { status, headers: corsHeaders(request, env) })
+}
+
+function jsonWithCookies(data, status, request, env, cookies = []) {
+  const headers = new Headers(corsHeaders(request, env))
+  cookies.forEach(cookie => headers.append('Set-Cookie', cookie))
+  return new Response(JSON.stringify(data), { status, headers })
 }
 
 function fail(message, status, request, env) {
@@ -110,6 +121,188 @@ function randomToken() {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function cookieValue(request, name) {
+  const cookies = request.headers.get('Cookie') || ''
+  const match = cookies.split(';').map(value => value.trim()).find(value => value.startsWith(`${name}=`))
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : ''
+}
+
+function cookieHeader(name, value, maxAge) {
+  return `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=/; Secure; HttpOnly; SameSite=None`
+}
+
+function googleClientId(env) {
+  return String(env.GOOGLE_CLIENT_ID || SHOP_CONFIG.googleAuth?.clientId || '').trim()
+}
+
+function publicUser(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url || '',
+    loyaltyPoints: Number(row.loyalty_points || 0),
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at
+  }
+}
+
+async function saveGoogleChallenge(env, challenge, nonce) {
+  const expiresAt = Date.now() + 10 * 60 * 1000
+  const key = `google-challenge:${await hash(challenge)}`
+  const value = JSON.stringify({ nonce, expiresAt })
+  if (env.RATE_LIMIT_KV) {
+    await env.RATE_LIMIT_KV.put(key, value, { expirationTtl: 600 })
+  } else {
+    memoryGoogleChallenges.set(key, { nonce, expiresAt })
+  }
+}
+
+async function takeGoogleChallenge(request, env, suppliedNonce) {
+  const challenge = cookieValue(request, 'djc_google_challenge')
+  if (!challenge || !suppliedNonce) return false
+  const key = `google-challenge:${await hash(challenge)}`
+  let stored = null
+  if (env.RATE_LIMIT_KV) stored = await env.RATE_LIMIT_KV.get(key, 'json')
+  else stored = memoryGoogleChallenges.get(key)
+  if (env.RATE_LIMIT_KV) await env.RATE_LIMIT_KV.delete(key)
+  else memoryGoogleChallenges.delete(key)
+  return Boolean(stored && stored.expiresAt > Date.now() && stored.nonce === suppliedNonce)
+}
+
+async function verifyGoogleIdToken(credential, nonce, env) {
+  const clientId = googleClientId(env)
+  if (!clientId) throw new Error('Connexion Google non configurée.')
+  const parts = String(credential || '').split('.')
+  if (parts.length !== 3) throw new Error('Jeton Google invalide.')
+  const header = decodeJwtPart(parts[0])
+  const claims = decodeJwtPart(parts[1])
+  const now = Math.floor(Date.now() / 1000)
+  const issuer = claims.iss === 'https://accounts.google.com' || claims.iss === 'accounts.google.com'
+  const audience = claims.aud === clientId
+  if (header.alg !== 'RS256' || !header.kid || !issuer || !audience || (claims.azp && claims.azp !== clientId) || claims.nonce !== nonce || !claims.sub || !claims.email || claims.email_verified !== true || !Number(claims.exp) || Number(claims.exp) <= now || Number(claims.iat || 0) > now + 60) throw new Error('Jeton Google refusé.')
+
+  let keys = googleCertificatesCache.keys
+  if (googleCertificatesCache.expiresAt <= Date.now() || !keys.length) {
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/certs', { headers: { Accept: 'application/json' } })
+    if (!response.ok) throw new Error('Validation Google indisponible.')
+    const result = await response.json()
+    keys = Array.isArray(result.keys) ? result.keys : []
+    googleCertificatesCache = { expiresAt: Date.now() + 5 * 60 * 1000, keys }
+  }
+  const jwk = keys.find(key => key.kid === header.kid)
+  if (!jwk) throw new Error('Jeton Google refusé.')
+  const cryptoKey = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
+  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', cryptoKey, base64UrlBytes(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`))
+  if (!valid) throw new Error('Jeton Google refusé.')
+  return {
+    googleSub: cleanText(claims.sub, 255),
+    email: validEmail(claims.email),
+    displayName: cleanText(claims.name || claims.email.split('@')[0], SHOP_CONFIG.limits.maxNameLength * 2),
+    avatarUrl: typeof claims.picture === 'string' && claims.picture.startsWith('https://') ? claims.picture.slice(0, 1000) : ''
+  }
+}
+
+async function currentUser(request, env, requireCsrf = false) {
+  if (!env.DB) return null
+  const sessionToken = cookieValue(request, 'djc_session')
+  if (!sessionToken) return null
+  const tokenHash = await hash(sessionToken)
+  const row = await env.DB.prepare('SELECT s.*, u.id AS user_id, u.google_sub, u.email, u.display_name, u.avatar_url, u.loyalty_points, u.created_at AS user_created_at, u.last_login_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?').bind(tokenHash).first()
+  const expiresAt = Date.parse(row?.expires_at || '')
+  if (!row || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null
+  if (requireCsrf) {
+    const csrf = request.headers.get('X-CSRF-Token') || ''
+    if (!csrf || (await hash(csrf)) !== row.csrf_token_hash) throw new Error('Protection CSRF invalide.')
+  }
+  return {
+    id: row.user_id,
+    googleSub: row.google_sub,
+    email: row.email,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url || '',
+    loyaltyPoints: Number(row.loyalty_points || 0),
+    createdAt: row.user_created_at,
+    lastLoginAt: row.last_login_at
+  }
+}
+
+async function beginGoogleAuth(env) {
+  if (!googleClientId(env) || !SHOP_CONFIG.googleAuth?.enabled) throw new Error('Connexion Google non configurée.')
+  const challenge = randomToken()
+  const nonce = randomToken()
+  await saveGoogleChallenge(env, challenge, nonce)
+  return { nonce, cookie: cookieHeader('djc_google_challenge', challenge, 600) }
+}
+
+async function finishGoogleAuth(request, payload, env) {
+  if (!env.DB) throw new Error('Stockage Cloudflare non configuré.')
+  const nonce = cleanText(payload?.nonce, 128)
+  if (!await takeGoogleChallenge(request, env, nonce)) throw new Error('Session de connexion Google expirée.')
+  const profile = await verifyGoogleIdToken(payload?.credential, nonce, env)
+  if (!profile.email) throw new Error('Adresse e-mail Google invalide.')
+  const now = new Date().toISOString()
+  let user = await env.DB.prepare('SELECT * FROM users WHERE google_sub = ?').bind(profile.googleSub).first()
+  if (user) {
+    await env.DB.prepare('UPDATE users SET email = ?, display_name = ?, avatar_url = ?, updated_at = ?, last_login_at = ? WHERE id = ?').bind(profile.email, profile.displayName, profile.avatarUrl || null, now, now, user.id).run()
+    user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.id).first()
+  } else {
+    const id = crypto.randomUUID()
+    try {
+      await env.DB.prepare('INSERT INTO users (id, google_sub, email, display_name, avatar_url, loyalty_points, created_at, updated_at, last_login_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)').bind(id, profile.googleSub, profile.email, profile.displayName, profile.avatarUrl || null, now, now, now).run()
+      user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first()
+    } catch (error) {
+      user = await env.DB.prepare('SELECT * FROM users WHERE google_sub = ?').bind(profile.googleSub).first()
+      if (!user) throw error
+    }
+  }
+  const sessionToken = randomToken()
+  const csrfToken = randomToken()
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  const sessionNow = new Date().toISOString()
+  await env.DB.prepare('INSERT INTO sessions (id, user_id, token_hash, csrf_token_hash, expires_at, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), user.id, await hash(sessionToken), await hash(csrfToken), expiresAt, sessionNow, sessionNow).run()
+  return { user: publicUser(user), csrfToken, cookie: cookieHeader('djc_session', sessionToken, 30 * 24 * 60 * 60) }
+}
+
+async function refreshCsrfToken(request, user, env) {
+  if (!env.DB || !user) return ''
+  const sessionToken = cookieValue(request, 'djc_session')
+  if (!sessionToken) return ''
+  const csrfToken = randomToken()
+  const result = await env.DB.prepare('UPDATE sessions SET csrf_token_hash = ?, last_seen_at = ? WHERE token_hash = ? AND user_id = ?').bind(await hash(csrfToken), new Date().toISOString(), await hash(sessionToken), user.id).run()
+  return Number(result.meta?.changes || 0) === 1 ? csrfToken : ''
+}
+
+async function optionalUser(request, env) {
+  const hasSession = Boolean(cookieValue(request, 'djc_session'))
+  return currentUser(request, env, hasSession)
+}
+
+async function accountOverview(user, env) {
+  if (!user || !env.DB) throw new Error('Connexion requise.')
+  const userRow = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.id).first()
+  if (!userRow) throw new Error('Compte introuvable.')
+  const orders = await env.DB.prepare('SELECT id, order_number, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, payment_status, order_status, loyalty_points_used, loyalty_points_earned, created_at FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.id).all()
+  const tickets = await env.DB.prepare('SELECT ticket_number, order_id, subject, category, status, payment_status, created_at, updated_at FROM tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.id).all()
+  const transactions = await env.DB.prepare('SELECT type, points, reason, order_id, created_at FROM loyalty_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.id).all()
+  return {
+    user: publicUser(userRow),
+    orders: (orders.results || []).map(row => ({
+      orderNumber: row.order_number,
+      products: JSON.parse(row.items_json || '[]'),
+      totals: { subtotal: Number(row.subtotal_cents || 0) / 100, discount: Number(row.discount_cents || 0) / 100, shipping: Number(row.shipping_cents || 0) / 100, total: Number(row.total_cents || 0) / 100 },
+      paymentStatus: row.payment_status,
+      orderStatus: row.order_status,
+      loyaltyPointsUsed: Number(row.loyalty_points_used || 0),
+      loyaltyPointsEarned: Number(row.loyalty_points_earned || 0),
+      createdAt: row.created_at
+    })),
+    tickets: (tickets.results || []).map(row => ({ ticketNumber: row.ticket_number, orderId: row.order_id || '', subject: row.subject, category: row.category, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at })),
+    loyaltyTransactions: (transactions.results || []).map(row => ({ type: row.type, points: Number(row.points || 0), reason: row.reason, orderId: row.order_id || '', createdAt: row.created_at }))
+  }
 }
 
 function base64UrlBytes(value) {
@@ -267,34 +460,65 @@ function validateCustomer(customer, requireNames = true) {
   return result
 }
 
-function calculateOrder(payload) {
+function cents(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number < 0 || number * 100 > Number.MAX_SAFE_INTEGER) throw new Error('Montant invalide.')
+  return Math.round(number * 100)
+}
+
+function euros(centsValue) {
+  return Number(centsValue || 0) / 100
+}
+
+function calculateOrder(payload, user) {
   if (!Array.isArray(payload.items) || !payload.items.length) throw new Error('Panier vide.')
   const items = payload.items.map(raw => {
     const productId = cleanText(raw?.productId, 80)
     const product = productById(productId)
     const quantity = Number.parseInt(raw?.quantity, 10)
     if (!product || !product.available || !Number.isInteger(quantity) || quantity < 1 || quantity > SHOP_CONFIG.limits.maxQuantityPerProduct) throw new Error('Produit ou quantité invalide.')
-    return { id: product.id, name: product.name, quantity, price: product.price, weight: product.weight }
+    return { id: product.id, name: product.name, quantity, price: product.price, priceCents: cents(product.price), weight: product.weight }
   })
-  const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0)
+  const subtotalCents = items.reduce((total, item) => total + item.priceCents * item.quantity, 0)
   const testMode = testPromoApplies(payload.promoCode, items.map(item => ({ productId: item.id })))
   const suppliedPromo = cleanText(payload.promoCode, 32).toUpperCase()
   if (suppliedPromo && !testMode) throw new Error('Code promo invalide pour ce panier.')
   const relay = canonicalRelay(payload.relay)
   if (!relay) throw new Error('Point Relais invalide.')
-  const quotedShipping = relay ? relay.price : 0
-  const discount = testMode ? subtotal : 0
-  const shipping = testMode ? 0 : quotedShipping
+  const quotedShippingCents = cents(relay.price)
+  const promoDiscountCents = testMode ? subtotalCents : 0
+  const productPayableBeforePointsCents = Math.max(0, subtotalCents - promoDiscountCents)
+  let loyaltyPointsUsed = 0
+  let loyaltyDiscountCents = 0
+  const requestedPoints = Number.parseInt(payload.loyaltyPointsToUse, 10) || 0
+  if (!testMode && requestedPoints) {
+    if (!user || !SHOP_CONFIG.loyalty.enabled) throw new Error('Connexion requise pour utiliser des points.')
+    const pointsPerEuroDiscount = Number(SHOP_CONFIG.loyalty.pointsPerEuroDiscount)
+    const maxDiscountCents = Math.floor(productPayableBeforePointsCents * Number(SHOP_CONFIG.loyalty.maxCartPercentage) / 100)
+    const maxPoints = Math.floor(maxDiscountCents * pointsPerEuroDiscount / 100)
+    if (!Number.isInteger(requestedPoints) || requestedPoints < 0 || requestedPoints % 10 !== 0 || requestedPoints > Number(user.loyaltyPoints || 0) || requestedPoints > maxPoints) throw new Error('Nombre de points invalide ou supérieur à la limite autorisée.')
+    loyaltyPointsUsed = requestedPoints
+    loyaltyDiscountCents = Math.floor(requestedPoints * 100 / pointsPerEuroDiscount)
+  }
+  const discountCents = promoDiscountCents + loyaltyDiscountCents
+  const shippingCents = testMode ? 0 : quotedShippingCents
+  const eligibleProductCents = Math.max(0, productPayableBeforePointsCents - loyaltyDiscountCents)
+  const pointsEarned = !testMode && user && SHOP_CONFIG.loyalty.enabled ? eligibleProductCents * Number(SHOP_CONFIG.loyalty.pointsPerCent) : 0
   return {
     items,
     relay,
     testMode,
     promoCode: testMode ? suppliedPromo : '',
-    subtotal,
-    discount,
-    quotedShipping,
-    shipping,
-    total: Math.max(0, subtotal - discount + shipping)
+    subtotalCents,
+    promoDiscountCents,
+    loyaltyPointsUsed,
+    loyaltyDiscountCents,
+    discountCents,
+    quotedShippingCents,
+    shippingCents,
+    eligibleProductCents,
+    pointsEarned,
+    totalCents: Math.max(0, subtotalCents - discountCents + shippingCents)
   }
 }
 
@@ -336,16 +560,22 @@ function publicTicket(record) {
     createdAt: record.createdAt,
     paymentProof,
     paymentStatus: record.paymentStatus || 'NON CONCERNÉ',
+    loyalty: record.orderNumber ? {
+      pointsUsed: Number(record.loyaltyPointsUsed || 0),
+      pointsEarned: Number(record.loyaltyPointsEarned || 0),
+      discount: Number(record.loyaltyDiscount || 0)
+    } : null,
     status: record.status || 'NOUVEAU',
     history: record.history || [],
     updatedAt: record.updatedAt || record.createdAt
   }
 }
 
-async function createOrderRecord(payload, env, ctx) {
+async function createOrderRecord(payload, env, ctx, user) {
   if (payload.consent !== true) throw new Error('Le consentement est obligatoire.')
-  const customer = validateCustomer(payload.customer, true)
-  const order = calculateOrder(payload)
+  const submittedCustomer = validateCustomer(payload.customer, true)
+  const customer = user ? { ...submittedCustomer, email: user.email } : submittedCustomer
+  const order = calculateOrder(payload, user)
   const payment = payload.payment || {}
   if (payment.method === 'TEST' && !order.testMode) throw new Error('Le paiement de test est réservé au produit Test.')
   if (payment.method !== 'TEST' && payment.method !== 'PAYPAL') throw new Error('Mode de paiement invalide.')
@@ -364,7 +594,12 @@ async function createOrderRecord(payload, env, ctx) {
     subject: 'Commande CD DJCreeper',
     category: 'Commande',
     products: order.items,
-    totals: { subtotal: order.subtotal, discount: order.discount, shipping: order.shipping, total: order.total },
+    totals: { subtotal: euros(order.subtotalCents), discount: euros(order.discountCents), shipping: euros(order.shippingCents), total: euros(order.totalCents) },
+    loyaltyPointsUsed: order.testMode ? 0 : order.loyaltyPointsUsed,
+    loyaltyPointsEarned: 0,
+    loyaltyDiscount: euros(order.loyaltyDiscountCents),
+    loyaltyEligibleCents: order.testMode ? 0 : order.eligibleProductCents,
+    userId: user?.id || '',
     relay: order.relay,
     orderStatus: 'EN PRÉPARATION',
     paymentStatus: 'À VÉRIFIER',
@@ -376,10 +611,26 @@ async function createOrderRecord(payload, env, ctx) {
     accessTokenHash
   }
   if (env.DB) {
-    await env.DB.batch([
-      env.DB.prepare('INSERT INTO orders (id, order_number, customer_json, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, promo_code, payment_status, payment_method, order_status, proof_key, proof_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(record.id, record.orderNumber, JSON.stringify(customer), JSON.stringify(record.products), Math.round(order.subtotal * 100), Math.round(order.discount * 100), Math.round(order.shipping * 100), Math.round(order.total * 100), JSON.stringify(order.relay), order.promoCode, record.paymentStatus, record.paymentMethod, record.orderStatus, paymentProof?.storageKey || null, JSON.stringify(paymentProof), createdAt),
-      env.DB.prepare('INSERT INTO tickets (id, ticket_number, order_id, customer_json, subject, category, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, payment_status, proof_json, status, access_token_hash, history_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), record.ticketNumber, record.id, JSON.stringify(customer), record.subject, record.category, JSON.stringify(record.products), Math.round(order.subtotal * 100), Math.round(order.discount * 100), Math.round(order.shipping * 100), Math.round(order.total * 100), JSON.stringify(order.relay), record.paymentStatus, JSON.stringify(paymentProof), record.status, accessTokenHash, JSON.stringify(record.history), createdAt, createdAt)
-    ])
+    const statements = []
+    if (user && record.loyaltyPointsUsed > 0 && !record.testMode) {
+      statements.push(env.DB.prepare('INSERT INTO loyalty_transactions (id, transaction_key, user_id, order_id, type, points, reason, created_at) VALUES (?, ?, ?, ?, \'spent\', ?, ?, ?)').bind(crypto.randomUUID(), `spent:${record.id}`, user.id, record.id, -record.loyaltyPointsUsed, `Réduction fidélité ${record.orderNumber}`, createdAt))
+    }
+    statements.push(
+      env.DB.prepare('INSERT INTO orders (id, order_number, user_id, customer_json, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, promo_code, payment_status, payment_method, order_status, loyalty_points_used, loyalty_eligible_cents, loyalty_points_earned, loyalty_awarded_at, loyalty_refunded_at, proof_key, proof_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)').bind(record.id, record.orderNumber, record.userId || null, JSON.stringify(customer), JSON.stringify(record.products), order.subtotalCents, order.discountCents, order.shippingCents, order.totalCents, JSON.stringify(order.relay), order.promoCode, record.paymentStatus, record.paymentMethod, record.orderStatus, record.loyaltyPointsUsed, record.loyaltyEligibleCents, 0, paymentProof?.storageKey || null, JSON.stringify(paymentProof), createdAt),
+      env.DB.prepare('INSERT INTO tickets (id, ticket_number, order_id, user_id, customer_json, subject, category, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, payment_status, proof_json, status, access_token_hash, history_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), record.ticketNumber, record.id, record.userId || null, JSON.stringify(customer), record.subject, record.category, JSON.stringify(record.products), order.subtotalCents, order.discountCents, order.shippingCents, order.totalCents, JSON.stringify(order.relay), record.paymentStatus, JSON.stringify(paymentProof), record.status, accessTokenHash, JSON.stringify(record.history), createdAt, createdAt)
+    )
+    try {
+      await env.DB.batch(statements)
+    } catch (error) {
+      // Une transaction D1 refusée (par exemple un solde de points devenu
+      // insuffisant entre deux onglets) ne doit pas laisser une preuve R2
+      // orpheline ni consommer le quota.
+      if (paymentProof?.storageKey && env.PAYMENT_PROOFS) {
+        try { await env.PAYMENT_PROOFS.delete(paymentProof.storageKey) } catch (cleanupError) {}
+        try { await releaseProofQuota(env, paymentProof.size) } catch (cleanupError) {}
+      }
+      throw error
+    }
   } else {
     if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
     memoryTickets.set(record.ticketNumber, record)
@@ -388,8 +639,8 @@ async function createOrderRecord(payload, env, ctx) {
   return { ticket: publicTicket(record), ticketAccessToken: accessToken }
 }
 
-async function createSupportRecord(payload, env, ctx) {
-  const email = validEmail(payload.email || payload.customer?.email)
+async function createSupportRecord(payload, env, ctx, user) {
+  const email = user?.email || validEmail(payload.email || payload.customer?.email)
   const subject = cleanText(payload.subject, SHOP_CONFIG.limits.maxSubjectLength)
   const category = cleanText(payload.category, 60)
   const message = cleanText(payload.message, SHOP_CONFIG.limits.maxMessageLength)
@@ -403,6 +654,7 @@ async function createSupportRecord(payload, env, ctx) {
     ticketNumber,
     orderNumber: '',
     customer: { email },
+    userId: user?.id || '',
     subject,
     category,
     products: [],
@@ -417,7 +669,7 @@ async function createSupportRecord(payload, env, ctx) {
   }
   record.history.push({ author: 'client', automated: false, createdAt, body: message })
   if (env.DB) {
-    await env.DB.prepare('INSERT INTO tickets (id, ticket_number, order_id, customer_json, subject, category, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, payment_status, proof_json, status, access_token_hash, history_json, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, 0, 0, 0, 0, NULL, ?, NULL, ?, ?, ?, ?, ?)').bind(record.id, record.ticketNumber, JSON.stringify(record.customer), record.subject, record.category, JSON.stringify([]), record.paymentStatus, record.status, accessTokenHash, JSON.stringify(record.history), createdAt, createdAt).run()
+    await env.DB.prepare('INSERT INTO tickets (id, ticket_number, order_id, user_id, customer_json, subject, category, items_json, subtotal_cents, discount_cents, shipping_cents, total_cents, relay_json, payment_status, proof_json, status, access_token_hash, history_json, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 0, 0, 0, 0, NULL, ?, NULL, ?, ?, ?, ?, ?)').bind(record.id, record.ticketNumber, record.userId || null, JSON.stringify(record.customer), record.subject, record.category, JSON.stringify([]), record.paymentStatus, record.status, accessTokenHash, JSON.stringify(record.history), createdAt, createdAt).run()
   } else {
     if (env.ALLOW_LOCAL_DEMO !== 'true') throw new Error('Stockage Cloudflare non configuré.')
     memoryTickets.set(record.ticketNumber, record)
@@ -436,7 +688,7 @@ async function viewTicket(payload, env) {
     if (!record || record.accessTokenHash !== accessTokenHash) throw new Error('Ticket introuvable.')
     return { ticket: publicTicket(record) }
   }
-  const row = await env.DB.prepare('SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
+  const row = await env.DB.prepare('SELECT t.*, o.order_number, o.order_status, o.user_id AS order_user_id, o.loyalty_points_used, o.loyalty_points_earned, o.loyalty_eligible_cents, o.discount_cents AS order_discount_cents FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
   if (!row) throw new Error('Ticket introuvable.')
   return { ticket: publicTicket(recordFromRow(row)) }
 }
@@ -448,6 +700,7 @@ function recordFromRow(row) {
     id: row.id,
     ticketNumber: row.ticket_number,
     orderId: row.order_id || '',
+    userId: row.user_id || row.order_user_id || '',
     orderNumber: row.order_number || '',
     orderStatus: row.order_status || '',
     customer,
@@ -455,6 +708,9 @@ function recordFromRow(row) {
     category: row.category,
     products,
     totals: { subtotal: Number(row.subtotal_cents || 0) / 100, discount: Number(row.discount_cents || 0) / 100, shipping: Number(row.shipping_cents || 0) / 100, total: Number(row.total_cents || 0) / 100 },
+    loyaltyPointsUsed: Number(row.loyalty_points_used || 0),
+    loyaltyPointsEarned: Number(row.loyalty_points_earned || 0),
+    loyaltyDiscount: Number(row.loyalty_points_used || 0) * 100 / Number(SHOP_CONFIG.loyalty.pointsPerEuroDiscount || 1000) / 100,
     relay: JSON.parse(row.relay_json || 'null'),
     paymentStatus: row.payment_status,
     paymentProof: JSON.parse(row.proof_json || 'null'),
@@ -479,7 +735,7 @@ async function appendTicketMessage(payload, env) {
     if (record.status === 'NOUVEAU') record.status = 'EN ATTENTE VENDEUR'
     return { ticket: publicTicket(record) }
   }
-  const row = await env.DB.prepare('SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
+  const row = await env.DB.prepare('SELECT t.*, o.order_number, o.order_status, o.user_id AS order_user_id, o.loyalty_points_used, o.loyalty_points_earned, o.loyalty_eligible_cents, o.discount_cents AS order_discount_cents FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ? AND t.access_token_hash = ?').bind(ticketNumber, accessTokenHash).first()
   if (!row) throw new Error('Ticket introuvable.')
   const record = recordFromRow(row)
   record.history.push({ author: 'client', automated: false, createdAt: new Date().toISOString(), body: message })
@@ -499,7 +755,7 @@ function adminFilter(payload) {
 
 async function adminTicketRow(ticketNumber, env) {
   if (!env.DB) return null
-  return env.DB.prepare('SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ?').bind(ticketNumber).first()
+  return env.DB.prepare('SELECT t.*, o.order_number, o.order_status, o.user_id AS order_user_id, o.loyalty_points_used, o.loyalty_points_earned, o.loyalty_eligible_cents, o.loyalty_awarded_at, o.loyalty_refunded_at, o.discount_cents AS order_discount_cents FROM tickets t LEFT JOIN orders o ON o.id = t.order_id WHERE t.ticket_number = ?').bind(ticketNumber).first()
 }
 
 function matchesAdminSearch(record, search) {
@@ -532,7 +788,7 @@ async function listAdminTickets(payload, env) {
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const countRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM tickets t LEFT JOIN orders o ON o.id = t.order_id ${where}`).bind(...bindings).first()
-  const rows = await env.DB.prepare(`SELECT t.*, o.order_number, o.order_status FROM tickets t LEFT JOIN orders o ON o.id = t.order_id ${where} ORDER BY t.created_at DESC LIMIT 200`).bind(...bindings).all()
+  const rows = await env.DB.prepare(`SELECT t.*, o.order_number, o.order_status, o.user_id AS order_user_id, o.loyalty_points_used, o.loyalty_points_earned, o.loyalty_eligible_cents, o.loyalty_awarded_at, o.loyalty_refunded_at, o.discount_cents AS order_discount_cents FROM tickets t LEFT JOIN orders o ON o.id = t.order_id ${where} ORDER BY t.created_at DESC LIMIT 200`).bind(...bindings).all()
   return { total: Number(countRow?.total || 0), tickets: (rows.results || []).map(row => publicTicket(recordFromRow(row))) }
 }
 
@@ -582,8 +838,19 @@ async function updateAdminPaymentStatus(payload, env) {
   }
   const row = await adminTicketRow(ticketNumber, env)
   if (!row) throw new Error('Ticket introuvable.')
-  const statements = [env.DB.prepare('UPDATE tickets SET payment_status = ?, updated_at = ? WHERE ticket_number = ?').bind(paymentStatus, new Date().toISOString(), ticketNumber)]
-  if (row.order_id) statements.push(env.DB.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').bind(paymentStatus, row.order_id))
+  const updatedAt = new Date().toISOString()
+  const statements = []
+  if (row.order_id) {
+    const shouldAward = paymentStatus === 'PAYÉ' && row.order_status !== 'ANNULÉE' && row.order_user_id && Number(row.loyalty_eligible_cents || 0) > 0 && !row.loyalty_awarded_at
+    if (shouldAward) {
+      const earned = Number(row.loyalty_eligible_cents || 0) * Number(SHOP_CONFIG.loyalty.pointsPerCent || 1)
+      statements.push(env.DB.prepare('INSERT INTO loyalty_transactions (id, transaction_key, user_id, order_id, type, points, reason, created_at) VALUES (?, ?, ?, ?, \'earned\', ?, ?, ?)').bind(crypto.randomUUID(), `earned:${row.order_id}`, row.order_user_id, row.order_id, earned, `Achat ${row.order_number}`, updatedAt))
+      statements.push(env.DB.prepare('UPDATE orders SET payment_status = ?, loyalty_points_earned = ?, loyalty_awarded_at = ? WHERE id = ? AND loyalty_awarded_at IS NULL').bind(paymentStatus, earned, updatedAt, row.order_id))
+    } else {
+      statements.push(env.DB.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').bind(paymentStatus, row.order_id))
+    }
+  }
+  statements.push(env.DB.prepare('UPDATE tickets SET payment_status = ?, updated_at = ? WHERE ticket_number = ?').bind(paymentStatus, updatedAt, ticketNumber))
   await env.DB.batch(statements)
   return getAdminTicket({ ticketNumber }, env)
 }
@@ -636,7 +903,17 @@ async function updateAdminOrderStatus(payload, env, ctx) {
   if (!row?.order_id) throw new Error('Commande introuvable.')
   const currentStatus = row.order_status || 'EN PRÉPARATION'
   const updatedAt = new Date().toISOString()
-  await env.DB.prepare('UPDATE orders SET order_status = ? WHERE id = ?').bind(orderStatus, row.order_id).run()
+  const statements = []
+  if (orderStatus === 'ANNULÉE' && !row.loyalty_refunded_at && row.order_user_id) {
+    const pointsUsed = Number(row.loyalty_points_used || 0)
+    const pointsEarned = Number(row.loyalty_points_earned || 0)
+    if (pointsUsed > 0) statements.push(env.DB.prepare('INSERT INTO loyalty_transactions (id, transaction_key, user_id, order_id, type, points, reason, created_at) VALUES (?, ?, ?, ?, \'refund\', ?, ?, ?)').bind(crypto.randomUUID(), `refund-spent:${row.order_id}`, row.order_user_id, row.order_id, pointsUsed, `Remboursement des points utilisés ${row.order_number}`, updatedAt))
+    if (pointsEarned > 0) statements.push(env.DB.prepare('INSERT INTO loyalty_transactions (id, transaction_key, user_id, order_id, type, points, reason, created_at) VALUES (?, ?, ?, ?, \'refund\', ?, ?, ?)').bind(crypto.randomUUID(), `refund-earned:${row.order_id}`, row.order_user_id, row.order_id, -pointsEarned, `Annulation de points gagnés ${row.order_number}`, updatedAt))
+    statements.push(env.DB.prepare('UPDATE orders SET order_status = ?, loyalty_refunded_at = ? WHERE id = ? AND loyalty_refunded_at IS NULL').bind(orderStatus, updatedAt, row.order_id))
+  } else {
+    statements.push(env.DB.prepare('UPDATE orders SET order_status = ? WHERE id = ?').bind(orderStatus, row.order_id))
+  }
+  await env.DB.batch(statements)
   const record = recordFromRow({ ...row, order_status: orderStatus })
   record.updatedAt = updatedAt
   if (currentStatus !== orderStatus) queueOrderStatusEmail(ctx, env, record, orderStatus)
@@ -672,8 +949,39 @@ async function handle(request, env, ctx) {
   }
   if (request.method === 'GET' && url.pathname === '/api/health') return json({ ok: true, service: 'djcreeper-shop-api' }, 200, request, env)
   if (request.method === 'GET' && url.pathname === '/api/shop/catalog') return json({ products: SHOP_CONFIG.products, preorderNotice: SHOP_CONFIG.preorderNotice, storeStatus: SHOP_CONFIG.storeStatus, shipping: { provider: SHOP_CONFIG.shipping.provider, mode: SHOP_CONFIG.shipping.mode }, loyalty: SHOP_CONFIG.loyalty }, 200, request, env)
+  if (request.method === 'GET' && url.pathname === '/api/auth/me') {
+    if (!await rateLimit(request, env, 'auth-me', 60, 60 * 60 * 1000)) return fail('Trop de demandes de session. Réessaie plus tard.', 429, request, env)
+    const user = await currentUser(request, env)
+    if (!user) return json({ authenticated: false, user: null }, 200, request, env)
+    const csrfToken = await refreshCsrfToken(request, user, env)
+    return json({ authenticated: true, user: { ...user, googleSub: undefined }, csrfToken }, 200, request, env)
+  }
+  if (request.method === 'GET' && url.pathname === '/api/account') {
+    if (!await rateLimit(request, env, 'account', 60, 60 * 60 * 1000)) return fail('Trop de demandes de compte. Réessaie plus tard.', 429, request, env)
+    const user = await currentUser(request, env)
+    if (!user) return fail('Connexion requise.', 401, request, env)
+    return json(await accountOverview(user, env), 200, request, env)
+  }
   if (request.method === 'GET' && url.pathname.startsWith('/api/tickets/')) return fail('Accès privé requis.', 404, request, env)
   if (request.method !== 'POST') return fail('Méthode non autorisée.', 405, request, env)
+  if (url.pathname === '/api/auth/google/start') {
+    if (!await rateLimit(request, env, 'auth-start', 10, 60 * 60 * 1000)) return fail('Trop de tentatives de connexion. Réessaie plus tard.', 429, request, env)
+    const result = await beginGoogleAuth(env)
+    return jsonWithCookies({ nonce: result.nonce, clientId: googleClientId(env) }, 200, request, env, [result.cookie])
+  }
+  if (url.pathname === '/api/auth/google') {
+    if (!await rateLimit(request, env, 'auth-google', 10, 60 * 60 * 1000)) return fail('Trop de tentatives de connexion. Réessaie plus tard.', 429, request, env)
+    const payload = await readJson(request)
+    const result = await finishGoogleAuth(request, payload, env)
+    return jsonWithCookies({ authenticated: true, user: result.user, csrfToken: result.csrfToken }, 200, request, env, [cookieHeader('djc_google_challenge', '', 0), result.cookie])
+  }
+  if (url.pathname === '/api/auth/logout') {
+    if (!await rateLimit(request, env, 'auth-logout', 20, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
+    const user = await currentUser(request, env, Boolean(cookieValue(request, 'djc_session')))
+    const sessionToken = cookieValue(request, 'djc_session')
+    if (env.DB && sessionToken) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await hash(sessionToken)).run()
+    return jsonWithCookies({ authenticated: false }, 200, request, env, [cookieHeader('djc_session', '', 0), cookieHeader('djc_google_challenge', '', 0)])
+  }
   if (url.pathname === '/api/admin/tickets/list') {
     const payload = await readJson(request)
     return json(await listAdminTickets(payload, env), 200, request, env)
@@ -710,13 +1018,15 @@ async function handle(request, env, ctx) {
     if (!await rateLimit(request, env, 'orders', 5, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
     const payload = await readJson(request)
     if (!await verifyTurnstile(request, env, payload.turnstileToken)) return fail('Vérification anti-spam requise.', 400, request, env)
-    return json(await createOrderRecord(payload, env, ctx), 201, request, env)
+    const user = await optionalUser(request, env)
+    return json(await createOrderRecord(payload, env, ctx, user), 201, request, env)
   }
   if (url.pathname === '/api/support/tickets') {
     if (!await rateLimit(request, env, 'support', 5, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
     const payload = await readJson(request)
     if (!await verifyTurnstile(request, env, payload.turnstileToken)) return fail('Vérification anti-spam requise.', 400, request, env)
-    return json(await createSupportRecord(payload, env, ctx), 201, request, env)
+    const user = await optionalUser(request, env)
+    return json(await createSupportRecord(payload, env, ctx, user), 201, request, env)
   }
   if (url.pathname === '/api/tickets/view') {
     if (!await rateLimit(request, env, 'ticket-view', 20, 60 * 60 * 1000)) return fail('Trop de demandes. Réessaie plus tard.', 429, request, env)
@@ -725,6 +1035,7 @@ async function handle(request, env, ctx) {
   }
   if (url.pathname === '/api/tickets/messages') {
     if (!await rateLimit(request, env, 'messages', 20, 60 * 60 * 1000)) return fail('Trop de messages. Réessaie plus tard.', 429, request, env)
+    await optionalUser(request, env)
     const payload = await readJson(request)
     return json(await appendTicketMessage(payload, env), 200, request, env)
   }
@@ -737,6 +1048,7 @@ export default {
       return await handle(request, env, ctx)
     } catch (error) {
       const known = ['JSON invalide.', 'Requête trop volumineuse.', 'Capture trop volumineuse.', 'Format de capture refusé.', 'Signature de fichier image invalide.', 'Capture de paiement invalide.', 'Point Relais invalide.', 'Informations client invalides.', 'Panier vide.', 'Produit ou quantité invalide.', 'Code promo invalide pour ce panier.', 'Le consentement est obligatoire.', 'Le paiement de test est réservé au produit Test.', 'Mode de paiement invalide.', 'Message invalide.', 'Message vendeur invalide.', 'Ticket introuvable.', 'Informations de ticket invalides.', 'Statut de ticket invalide.', 'Statut de paiement invalide.', 'Statut de commande invalide.', 'Commande introuvable.', 'Preuve de paiement introuvable.', 'Configuration e-mail incomplète.', 'Le stockage Cloudflare non configuré.', 'Le stockage des preuves de paiement n’est pas configuré.', 'Le quota R2 nécessite le stockage D1.', 'Quota R2 dépassé.', 'Impossible de stocker la preuve de paiement.']
+      ;['Montant invalide.', 'Connexion Google non configurée.', 'Jeton Google invalide.', 'Jeton Google refusé.', 'Validation Google indisponible.', 'Adresse e-mail Google invalide.', 'Session de connexion Google expirée.', 'Connexion requise.', 'Compte introuvable.', 'Protection CSRF invalide.', 'Nombre de points invalide ou supérieur à la limite autorisée.'].forEach(message => { if (error?.message === message) known.push(message) })
       const message = known.includes(error?.message) ? error.message : 'Impossible de traiter la demande pour le moment.'
       const status = message === 'Ticket introuvable.' ? 404 : message === 'Quota R2 dépassé.' ? 507 : message.includes('trop volumineuse') ? 413 : 400
       return fail(message, status, request, env)

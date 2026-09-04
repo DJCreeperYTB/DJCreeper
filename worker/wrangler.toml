@@ -6,6 +6,9 @@ compatibility_date = "2026-09-04"
 # Cloudflare Pages. ALLOW_LOCAL_DEMO doit rester désactivé en production.
 [vars]
 PUBLIC_ORIGIN = "https://djcreeper.pages.dev"
+# Origines locales explicites du panel vendeur privé lancé par ouvrir-admin.bat.
+# Cette autorisation CORS ne remplace pas Cloudflare Access sur /api/admin/*.
+ADMIN_ORIGINS = "http://127.0.0.1:8090,http://localhost:8090"
 ALLOW_LOCAL_DEMO = "false"
 
 # Paramètres publics de vérification Cloudflare Access pour les routes /api/admin/*.

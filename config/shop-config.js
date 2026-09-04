@@ -17,20 +17,28 @@ export const SHOP_CONFIG = Object.freeze({
     title: 'Précommandes de CD bientôt disponibles',
     text: 'Les éditions physiques des Singles, EP et Albums de DJCreeper seront bientôt disponibles en précommande. Chaque CD sera fabriqué à la demande.'
   }),
-api: Object.freeze({
-  baseUrl: 'https://djcreeper-shop-api.djcreeper-musique.workers.dev',
-  allowLocalFallback: false,
-  turnstileSiteKey: ''
-}),
+  api: Object.freeze({
+    baseUrl: 'https://djcreeper-shop-api.djcreeper-musique.workers.dev',
+    allowLocalFallback: false,
+    turnstileSiteKey: ''
+  }),
+  googleAuth: Object.freeze({
+    enabled: true,
+    // Le Client ID est public, mais ne doit pas être inventé. À renseigner
+    // après création de l'application OAuth Google.
+    clientId: '971849303504-rkb7p85jjodtgtkd27r435amfrq92r85.apps.googleusercontent.com'
+  }),
   paypal: Object.freeze({
     url: 'https://paypal.me/djcreeperytb',
     accountCreationUrl: 'https://www.paypal.com/fr/cshelp/article/comment-ouvrir-un-compte-paypal%C2%A0--help315'
   }),
   loyalty: Object.freeze({
-    enabled: false,
-    pointsPerEuro: 10,
-    eurosPerHundredPoints: 1,
-    maxCartPercentage: 30
+    enabled: true,
+    pointsPerCent: 1,
+    pointsPerEuroDiscount: 1000,
+    maxCartPercentage: 30,
+    shippingEarnsPoints: false,
+    shippingCanBePaidWithPoints: false
   }),
   shipping: Object.freeze({
     provider: 'mondial-relay',

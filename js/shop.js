@@ -18,6 +18,10 @@ const state = {
   relay: null,
   paymentProof: null,
   ticket: null,
+  account: null,
+  csrfToken: '',
+  googleNonce: '',
+  accountOverview: null,
   checkoutStep: 1,
   objectUrl: null
 }
@@ -87,15 +91,28 @@ function isTestMode() {
   return Boolean(promo && state.promoCode === promo.code && entries.length > 0 && entries.every(({ product }) => product.testProduct))
 }
 
+function loyaltySelection() {
+  if (!state.account || !SHOP_CONFIG.loyalty.enabled || isTestMode() || !$('#use-loyalty')?.checked) return 0
+  const value = Number.parseInt($('#loyalty-points')?.value, 10)
+  return Number.isInteger(value) && value > 0 ? value : 0
+}
+
 function calculateTotals() {
   const entries = cartEntries()
   const subtotal = entries.reduce((total, { line, product }) => total + product.price * line.quantity, 0)
-  const discount = isTestMode() ? subtotal : 0
+  const promoDiscount = isTestMode() ? subtotal : 0
+  const productPayable = Math.max(0, subtotal - promoDiscount)
+  const maxDiscount = productPayable * Number(SHOP_CONFIG.loyalty.maxCartPercentage || 30) / 100
+  const maxPoints = Math.floor(maxDiscount * 100 * Number(SHOP_CONFIG.loyalty.pointsPerEuroDiscount || 1000) / 100)
+  const selectedPoints = Math.min(loyaltySelection(), Number(state.account?.loyaltyPoints || 0), maxPoints)
+  const loyaltyDiscount = isTestMode() ? 0 : selectedPoints / Number(SHOP_CONFIG.loyalty.pointsPerEuroDiscount || 1000)
+  const discount = promoDiscount + loyaltyDiscount
   const quotedShipping = state.relay ? Number(state.relay.price) || SHOP_CONFIG.shipping.defaultPrice : 0
   // Une commande de test ne doit jamais demander un paiement réel. Le tarif du relais
   // reste visible dans la fiche du point, mais est neutralisé dans son total de test.
   const shipping = isTestMode() ? 0 : quotedShipping
-  return { subtotal, discount, quotedShipping, shipping, total: Math.max(0, subtotal - discount + shipping) }
+  const eligibleProduct = Math.max(0, productPayable - loyaltyDiscount)
+  return { subtotal, promoDiscount, loyaltyDiscount, loyaltyPointsUsed: isTestMode() ? 0 : selectedPoints, maxPoints, eligibleProduct, quotedShipping, shipping, discount, total: Math.max(0, subtotal - discount + shipping), pointsEarned: state.account && !isTestMode() ? Math.round(eligibleProduct * 100) : 0 }
 }
 
 function setMessage(element, message, type = '') {
@@ -240,7 +257,32 @@ function renderCart() {
   if (total) total.textContent = money(totals.total)
   const start = $('#checkout-start')
   if (start) start.disabled = !entries.length
+  renderLoyaltyControls()
   renderTestMode()
+}
+
+function renderLoyaltyControls() {
+  const box = $('#checkout-loyalty')
+  if (!box) return
+  box.hidden = !state.account
+  if (!state.account) return
+  const balance = Number(state.account.loyaltyPoints || 0)
+  const totals = calculateTotals()
+  const checkbox = $('#use-loyalty')
+  const input = $('#loyalty-points')
+  const feedback = $('#loyalty-feedback')
+  if ($('#checkout-loyalty-balance')) $('#checkout-loyalty-balance').textContent = `⭐ ${balance.toLocaleString('fr-FR')} points disponibles · ${money(balance / Number(SHOP_CONFIG.loyalty.pointsPerEuroDiscount || 1000))}`
+  if (input) {
+    input.max = String(Math.min(balance, totals.maxPoints))
+    if (Number(input.value) > Number(input.max)) input.value = input.max
+    input.disabled = isTestMode() || !checkbox?.checked
+  }
+  if (checkbox) checkbox.disabled = isTestMode() || balance <= 0
+  if (feedback) {
+    feedback.textContent = isTestMode()
+      ? 'Les commandes de test ne modifient pas les points de fidélité.'
+      : `Maximum utilisable sur les produits : ${Math.min(balance, totals.maxPoints).toLocaleString('fr-FR')} points. La livraison ne peut pas être payée avec des points.`
+  }
 }
 
 function renderTestMode() {
@@ -267,6 +309,7 @@ function appendSummaryRows(target) {
   const rows = [
     ['Sous-total', money(totals.subtotal)],
     ['Réductions', totals.discount ? `− ${money(totals.discount)}` : '—'],
+    ...(totals.loyaltyDiscount ? [['Réduction fidélité', `− ${money(totals.loyaltyDiscount)}`]] : []),
     ['Livraison', state.relay ? (isTestMode() ? `${money(totals.quotedShipping)} · neutralisée en mode test` : money(totals.shipping)) : 'À choisir']
   ]
   rows.forEach(([label, value]) => {
@@ -488,18 +531,215 @@ function apiBase() {
   return String(SHOP_CONFIG.api.baseUrl || '').replace(/\/$/, '')
 }
 
-async function apiRequest(path, body) {
+async function apiRequest(path, body, options = {}) {
   const base = apiBase()
   if (!base) throw new Error('API Cloudflare non configurée')
+  const method = options.method || (body === undefined ? 'GET' : 'POST')
+  const headers = { Accept: 'application/json' }
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (state.csrfToken && method !== 'GET') headers['X-CSRF-Token'] = state.csrfToken
   const response = await fetch(`${base}/api${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(body),
-    credentials: 'omit'
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: 'include'
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(data.error || `Erreur API ${response.status}`)
   return data
+}
+
+function renderAccountUI() {
+  const loggedOut = $('#account-logged-out')
+  const loggedIn = $('#account-logged-in')
+  if (!loggedOut || !loggedIn) return
+  const user = state.account
+  loggedOut.hidden = Boolean(user)
+  loggedIn.hidden = !user
+  if (!user) {
+    const emailField = $('#customer-email')
+    if (emailField) emailField.readOnly = false
+    return
+  }
+  $('#account-name').textContent = user.displayName || 'Compte DJCreeper'
+  $('#account-email').textContent = user.email || ''
+  const points = Number(user.loyaltyPoints || 0)
+  $('#account-points').textContent = `${points.toLocaleString('fr-FR')} points`
+  $('#account-points-value').textContent = `Valeur disponible : ${money(points / Number(SHOP_CONFIG.loyalty.pointsPerEuroDiscount || 1000))}`
+  const avatar = $('#account-avatar')
+  if (avatar) {
+    avatar.hidden = !user.avatarUrl
+    if (user.avatarUrl) avatar.src = user.avatarUrl
+  }
+  const emailField = $('#customer-email')
+  if (emailField && user.email) {
+    emailField.value = user.email
+    emailField.readOnly = true
+  }
+  const supportEmail = $('#support-email')
+  if (supportEmail && user.email && !supportEmail.value) supportEmail.value = user.email
+  renderLoyaltyControls()
+}
+
+async function loadCurrentAccount() {
+  if (!apiBase()) return
+  try {
+    const result = await apiRequest('/auth/me')
+    state.account = result.authenticated ? result.user : null
+    state.csrfToken = result.csrfToken || ''
+    renderAccountUI()
+    renderCart()
+    if (state.account) {
+      const names = String(state.account.displayName || '').trim().split(/\s+/)
+      const lastName = $('#customer-last-name')
+      const firstName = $('#customer-first-name')
+      if (firstName && !firstName.value) firstName.value = names.shift() || ''
+      if (lastName && !lastName.value) lastName.value = names.join(' ')
+    }
+  } catch (error) {
+    state.account = null
+    state.csrfToken = ''
+    renderAccountUI()
+  }
+}
+
+async function configureGoogleButton() {
+  const feedback = $('#google-auth-feedback')
+  if (!SHOP_CONFIG.googleAuth?.enabled) {
+    setMessage(feedback, 'La connexion Google est désactivée pour le moment.', 'info')
+    return
+  }
+  const clientId = String(SHOP_CONFIG.googleAuth.clientId || '').trim()
+  if (!clientId) {
+    setMessage(feedback, 'Connexion Google prête : le Client ID public doit encore être renseigné dans config/shop-config.js.', 'info')
+    return
+  }
+  try {
+    const challenge = await apiRequest('/auth/google/start', {})
+    state.googleNonce = challenge.nonce
+    const deadline = Date.now() + 6000
+    while (!globalThis.google?.accounts?.id && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100))
+    if (!globalThis.google?.accounts?.id) throw new Error('Le module Google Identity Services n’est pas disponible.')
+    globalThis.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCredential,
+      nonce: challenge.nonce,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    })
+    const target = $('#google-signin')
+    if (target) {
+      target.replaceChildren()
+      globalThis.google.accounts.id.renderButton(target, { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', logo_alignment: 'left' })
+    }
+    const fallback = $('#google-signin-fallback')
+    if (fallback) fallback.hidden = true
+    setMessage(feedback, '')
+  } catch (error) {
+    const fallback = $('#google-signin-fallback')
+    if (fallback) fallback.hidden = false
+    setMessage(feedback, error instanceof Error ? error.message : 'Connexion Google indisponible.', 'error')
+  }
+}
+
+async function handleGoogleCredential(response) {
+  try {
+    const result = await apiRequest('/auth/google', { credential: response.credential, nonce: state.googleNonce })
+    state.account = result.user
+    state.csrfToken = result.csrfToken || ''
+    state.googleNonce = ''
+    renderAccountUI()
+    renderCart()
+    setMessage($('#account-feedback'), 'Connexion réussie. Bienvenue !', 'success')
+  } catch (error) {
+    setMessage($('#google-auth-feedback'), error instanceof Error ? error.message : 'Connexion Google refusée.', 'error')
+  }
+}
+
+function emptyAccountList(target, message) {
+  if (!target) return
+  target.replaceChildren(makeElement('p', 'account-list-empty', message))
+}
+
+function renderAccountOverview(data) {
+  const overview = $('#account-overview')
+  if (overview) {
+    overview.replaceChildren()
+    overview.append(makeElement('p', '', `${data.user.displayName} · ${data.user.email}`))
+    overview.append(makeElement('p', 'muted', `Compte créé le ${dateLabel(data.user.createdAt)} · ${Number(data.user.loyaltyPoints || 0).toLocaleString('fr-FR')} points disponibles`))
+  }
+  const ordersTarget = $('#account-orders')
+  if (ordersTarget) {
+    ordersTarget.replaceChildren()
+    if (!data.orders.length) emptyAccountList(ordersTarget, 'Aucune commande liée à ce compte.')
+    data.orders.forEach(order => {
+      const item = makeElement('article', 'account-list-item')
+      item.append(makeElement('strong', '', order.orderNumber))
+      item.append(makeElement('p', '', `${order.products.map(product => `${product.name} × ${product.quantity}`).join(' · ')} · ${money(order.totals.total)} · ${order.orderStatus}`))
+      item.append(makeElement('p', '', `Paiement : ${order.paymentStatus} · ${dateLabel(order.createdAt)} · Points gagnés : ${Number(order.loyaltyPointsEarned || 0).toLocaleString('fr-FR')}`))
+      ordersTarget.append(item)
+    })
+  }
+  const ticketsTarget = $('#account-tickets')
+  if (ticketsTarget) {
+    ticketsTarget.replaceChildren()
+    if (!data.tickets.length) emptyAccountList(ticketsTarget, 'Aucun ticket lié à ce compte.')
+    data.tickets.forEach(ticket => {
+      const item = makeElement('article', 'account-list-item')
+      item.append(makeElement('strong', '', `#${ticket.ticketNumber}`))
+      item.append(makeElement('p', '', `${ticket.subject} · ${ticket.status} · ${dateLabel(ticket.createdAt)}`))
+      ticketsTarget.append(item)
+    })
+  }
+  const historyTarget = $('#account-loyalty-history')
+  if (historyTarget) {
+    historyTarget.replaceChildren()
+    if (!data.loyaltyTransactions.length) emptyAccountList(historyTarget, 'Aucune transaction de fidélité pour le moment.')
+    data.loyaltyTransactions.forEach(transaction => {
+      const item = makeElement('article', 'account-list-item')
+      const points = Number(transaction.points || 0)
+      item.append(makeElement('strong', points >= 0 ? 'points-positive' : 'points-negative', `${points >= 0 ? '+' : ''}${points.toLocaleString('fr-FR')} pts`))
+      item.append(makeElement('p', '', `${transaction.reason} · ${dateLabel(transaction.createdAt)}`))
+      historyTarget.append(item)
+    })
+  }
+}
+
+async function openAccountPanel() {
+  if (!state.account) return
+  const panel = $('#account-panel')
+  if (!panel) return
+  panel.hidden = false
+  const targets = ['#account-overview', '#account-orders', '#account-tickets', '#account-loyalty-history']
+  targets.forEach(selector => emptyAccountList($(selector), 'Chargement…'))
+  try {
+    const data = await apiRequest('/account')
+    state.account = data.user
+    renderAccountUI()
+    renderAccountOverview(data)
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  } catch (error) {
+    emptyAccountList($('#account-overview'), error instanceof Error ? error.message : 'Compte indisponible.')
+  }
+}
+
+async function logoutAccount() {
+  const button = $('#logout-account')
+  if (button) button.disabled = true
+  try {
+    await apiRequest('/auth/logout', {})
+  } catch (error) {
+    setMessage($('#account-feedback'), error instanceof Error ? error.message : 'Déconnexion impossible.', 'error')
+    if (button) button.disabled = false
+    return
+  }
+  state.account = null
+  state.csrfToken = ''
+  state.accountOverview = null
+  $('#account-panel').hidden = true
+  renderAccountUI()
+  renderCart()
+  if (button) button.disabled = false
 }
 
 function readFileAsDataUrl(file) {
@@ -523,6 +763,7 @@ async function orderPayload() {
     customer: state.customer,
     items: cartEntries().map(({ line, product }) => ({ productId: product.id, quantity: line.quantity })),
     promoCode: isTestMode() ? state.promoCode : '',
+    loyaltyPointsToUse: totals.loyaltyPointsUsed,
     relay: state.relay,
     totals,
     payment: { method: isTestMode() ? 'TEST' : 'PAYPAL', status: 'À VÉRIFIER', proof: await proofPayload() },
@@ -564,6 +805,7 @@ function showTicket(ticket) {
   $('#ticket-subtotal').textContent = ticket.orderNumber ? money(ticket.totals?.subtotal) : '—'
   $('#ticket-discount').textContent = ticket.orderNumber ? (ticket.totals?.discount ? `− ${money(ticket.totals.discount)}` : '—') : '—'
   $('#ticket-shipping').textContent = ticket.orderNumber ? money(ticket.totals?.shipping) : '—'
+  $('#ticket-loyalty').textContent = ticket.loyalty ? `${Number(ticket.loyalty.pointsUsed || 0).toLocaleString('fr-FR')} utilisés · ${Number(ticket.loyalty.pointsEarned || 0).toLocaleString('fr-FR')} gagnés après validation` : 'Non concerné'
   $('#ticket-proof').textContent = ticket.paymentProof ? `${ticket.paymentProof.fileName || 'Capture reçue'} · à vérifier` : 'Aucune'
   const status = $('#ticket-status')
   status.textContent = ticket.status || 'NOUVEAU'
@@ -599,6 +841,8 @@ function renderConfirmation(result) {
     access.append(document.createElement('br'), makeElement('code', 'confirmation-id', result.ticket.accessToken))
     box.append(access)
   }
+  if (result.ticket.loyalty?.pointsUsed) box.append(makeElement('p', 'field-help', `${Number(result.ticket.loyalty.pointsUsed).toLocaleString('fr-FR')} points ont été réservés. Ils seront recrédités si la commande est annulée.`))
+  if (isTestMode()) box.append(makeElement('p', 'field-help', 'Les commandes de test ne modifient pas les points de fidélité.'))
   if (!result.remote) box.append(makeElement('p', 'field-help', 'Mode local : ce ticket de démonstration reste disponible dans cette session. Le Worker Cloudflare le rendra persistant après configuration.'))
 }
 
@@ -737,34 +981,6 @@ function onProofChange(event) {
   setMessage($('#paypal-feedback'), '')
 }
 
-function renderRecoveryAvailability() {
-  const recovery = $('#ticket-recovery')
-  if (recovery) recovery.hidden = !apiBase()
-}
-
-async function recoverTicket(event) {
-  event.preventDefault()
-  const form = event.currentTarget
-  const feedback = $('#ticket-recovery-feedback')
-  const ticketNumber = normalizeText(form.elements.ticketNumber.value, 40)
-  const accessToken = normalizeText(form.elements.accessToken.value, 128)
-  if (!ticketNumber || !accessToken) {
-    setMessage(feedback, 'Le numéro et la clé d’accès sont nécessaires.', 'error')
-    return
-  }
-  const button = $('button[type="submit"]', form)
-  if (button) button.disabled = true
-  try {
-    const result = await apiRequest('/tickets/view', { ticketNumber, accessToken })
-    showTicket({ ...result.ticket, accessToken })
-    setMessage(feedback, 'Ticket retrouvé dans la session.', 'success')
-  } catch (error) {
-    setMessage(feedback, error instanceof Error ? error.message : 'Ticket introuvable.', 'error')
-  } finally {
-    if (button) button.disabled = false
-  }
-}
-
 function bindEvents() {
   $('#open-cart')?.addEventListener('click', () => {
     $('#shop-cart')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -806,6 +1022,8 @@ function bindEvents() {
     applyPromo(event.currentTarget.elements.promoCode.value)
   })
   $('#checkout-start')?.addEventListener('click', openCheckout)
+  $('#use-loyalty')?.addEventListener('change', () => { renderLoyaltyControls(); renderCart(); updateCheckoutReview($('#checkout-cart-review')); renderPayment() })
+  $('#loyalty-points')?.addEventListener('input', () => { renderLoyaltyControls(); renderCart(); updateCheckoutReview($('#checkout-cart-review')); renderPayment() })
   $$('[data-go-step]').forEach(button => button.addEventListener('click', () => goToStep(button.dataset.goStep)))
   $('#customer-form')?.addEventListener('submit', event => {
     event.preventDefault()
@@ -845,14 +1063,17 @@ function bindEvents() {
   $('#real-order-submit')?.addEventListener('click', submitOrder)
   $('#support-form')?.addEventListener('submit', submitSupport)
   $('#ticket-message-form')?.addEventListener('submit', submitTicketMessage)
-  $('#ticket-recovery-form')?.addEventListener('submit', recoverTicket)
+  $('#open-account')?.addEventListener('click', openAccountPanel)
+  $('#close-account')?.addEventListener('click', () => { $('#account-panel').hidden = true })
+  $('#logout-account')?.addEventListener('click', logoutAccount)
+  $('#google-signin-fallback')?.addEventListener('click', configureGoogleButton)
   $('#copy-ticket-access')?.addEventListener('click', async event => {
     const token = $('#ticket-access-token')?.textContent || ''
     try {
       await navigator.clipboard.writeText(token)
       event.currentTarget.textContent = 'Clé copiée'
     } catch (error) {
-      setMessage($('#ticket-recovery-feedback'), 'Copie automatique indisponible : sélectionne la clé manuellement.', 'info')
+      setMessage($('#ticket-access-feedback'), 'Copie automatique indisponible : sélectionne la clé manuellement.', 'info')
     }
   })
 }
@@ -863,8 +1084,8 @@ function init() {
   renderProducts()
   renderCart()
   bindEvents()
-  renderRecoveryAvailability()
   goToStep(1)
+  loadCurrentAccount().then(configureGoogleButton)
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true })

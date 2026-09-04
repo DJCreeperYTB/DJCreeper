@@ -12,11 +12,37 @@
 .shop-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 24px 0 14px; }
 .shop-toolbar p { margin: 0; color: var(--muted); font-size: .88rem; }
 .shop-toolbar .btn { flex: 0 0 auto; }
+.shop-account { display: grid; gap: 14px; margin: 18px 0; padding: 20px; }
+.shop-account h2, .account-panel h2 { margin: 5px 0 6px; }
+.shop-account .muted { max-width: 760px; margin: 0; }
+.google-signin { min-height: 42px; margin-top: 14px; }
+.account-identity { display: flex; align-items: center; gap: 12px; }
+.account-identity h2 { margin: 0; }
+.account-avatar { width: 48px; height: 48px; object-fit: cover; border: 1px solid var(--line-strong); border-radius: 50%; }
+.account-points { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; padding: 13px 15px; background: rgba(52, 211, 153, .1); border: 1px solid var(--line); border-radius: 12px; }
+.account-points strong { color: var(--accent); font-family: 'Space Grotesk', sans-serif; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.account-panel { margin-top: 24px; padding: clamp(20px, 4vw, 30px); scroll-margin-top: 95px; }
+.account-panel .section-heading { margin-bottom: 18px; }
+.account-overview { margin-bottom: 20px; }
+.account-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); margin-bottom: 22px; }
+.account-columns section > h3, .account-panel > section > h3 { margin-bottom: 10px; }
+.account-list { display: grid; gap: 9px; }
+.account-list-empty { padding: 13px; color: var(--muted); background: rgba(8, 11, 13, .35); border: 1px dashed var(--line); border-radius: 11px; font-size: .82rem; }
+.account-list-item { padding: 12px; background: rgba(8, 11, 13, .4); border: 1px solid var(--line); border-radius: 11px; }
+.account-list-item strong { color: var(--text); }
+.account-list-item p { margin: 4px 0 0; color: var(--muted); font-size: .78rem; }
+.account-list-item .points-positive { color: var(--accent); }
+.account-list-item .points-negative { color: var(--danger); }
+.checkout-loyalty { margin: 15px 0; padding: 15px; background: rgba(52, 211, 153, .06); border: 1px solid var(--line); border-radius: 13px; }
+.checkout-loyalty strong { color: var(--accent); }
+.checkout-loyalty .checkline { margin-top: 10px; }
+.checkout-loyalty .label { margin-top: 8px; }
 .shop-cart-count { display: inline-grid; min-width: 1.55em; min-height: 1.55em; place-items: center; padding: 0 5px; color: #10130a; background: var(--accent); border-radius: 999px; font-size: .78em; }
 .shop-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .74fr); gap: var(--gap); align-items: start; }
 .shop-catalog { min-width: 0; }
-.shop-product-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--gap); }
-.shop-product-card { display: flex; min-width: 0; flex-direction: column; gap: 15px; padding: 16px; }
+.shop-product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 230px)); justify-content: start; gap: var(--gap); }
+.shop-product-card { display: flex; width: 100%; max-width: 230px; min-width: 0; flex-direction: column; gap: 13px; padding: 12px; }
 .shop-product-gallery { display: grid; gap: 8px; }
 .shop-product-art { position: relative; display: grid; aspect-ratio: 1 / .82; place-items: center; overflow: hidden; background: radial-gradient(circle at 30% 24%, rgba(52, 211, 153, .32), transparent 33%), linear-gradient(145deg, #1b3b33, #090e10 72%); border: 1px solid var(--line-strong); border-radius: 16px; }
 .shop-product-art::before { position: absolute; right: -25%; bottom: -55%; width: 14rem; height: 14rem; content: ''; border: 1px solid rgba(142, 232, 180, .42); border-radius: 50%; box-shadow: 0 0 0 2rem rgba(52, 211, 153, .08), 0 0 0 4rem rgba(52, 211, 153, .05); }
@@ -174,8 +200,9 @@ textarea.input { min-height: 125px; resize: vertical; }
   .shop-toolbar { align-items: stretch; flex-direction: column; }
   .shop-toolbar .btn { width: 100%; }
   .shop-layout { grid-template-columns: 1fr; }
+  .shop-product-grid { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   .shop-cart { position: static; }
-  .external-merch-grid, .form-grid, .ticket-meta { grid-template-columns: 1fr; }
+  .external-merch-grid, .form-grid, .ticket-meta, .account-columns { grid-template-columns: 1fr; }
   .form-field.full { grid-column: auto; }
   .checkout-steps { gap: 4px; }
   .checkout-step { padding: 8px 3px; font-size: .61rem; }

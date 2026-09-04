@@ -11,7 +11,8 @@ Le site reste statique et conserve ses pages existantes. Le Shop ajoute une arch
 - `worker/src/index.js` : API Cloudflare Workers optionnelle, avec validation serveur, sanitation, limitation de débit, Turnstile optionnel, jetons d’accès privés pour les tickets et stockage D1/R2.
 - `worker/src/worker-config.js` : configuration côté Worker du statut vendeur ; elle n’est pas chargée par `shop.html`.
 - `worker/src/mondial-relay-adapter.js` : adaptateur isolé pour les points relais, en mode démonstration aujourd’hui et prêt pour l’API officielle plus tard.
-- `worker/schema.sql` : tables D1 pour commandes, tickets, historique, compteurs et quota R2.
+- `worker/schema.sql` : tables D1 pour commandes, tickets, comptes, sessions, historique de fidélité, compteurs et quota R2.
+- `worker/migrations/0003_accounts_loyalty.sql` : migration additive pour une D1 de production existante. Elle ne supprime aucune table ni donnée.
 - `worker/wrangler.toml` : bindings D1/R2/KV de production ; `PUBLIC_ORIGIN` reste temporairement local jusqu’à réception du domaine Pages.
 
 Le navigateur ne communique jamais avec un PC vendeur. La cible est :
@@ -81,11 +82,46 @@ Les produits sont ajoutés dans `config/shop-config.js`, sans modifier `shop.htm
 
 Pour ajouter un Single, un EP ou un Album, ajouter un objet à `SHOP_CONFIG.products` avec un nouvel `id`, puis vérifier son texte, son image, son poids et sa disponibilité. Le Worker recalculera le montant depuis cette même configuration : le prix transmis par le navigateur ne fait pas autorité.
 
-Les tarifs de livraison sont centralisés dans `SHOP_CONFIG.shipping`. La fidélité est préparée mais désactivée :
+Les tarifs de livraison sont centralisés dans `SHOP_CONFIG.shipping`. La fidélité est active avec la règle 1 centime payé sur les produits = 1 point :
 
 ```js
-loyalty: { enabled: false, pointsPerEuro: 10, eurosPerHundredPoints: 1, maxCartPercentage: 30 }
+loyalty: {
+  enabled: true,
+  pointsPerCent: 1,
+  pointsPerEuroDiscount: 1000,
+  maxCartPercentage: 30,
+  shippingEarnsPoints: false,
+  shippingCanBePaidWithPoints: false
+}
 ```
+
+Les calculs d’autorité sont réalisés dans le Worker en centimes entiers : 1 000 points valent 1 €, et au plus 30 % du montant des produits peut être réglé avec des points. Les frais de livraison ne rapportent aucun point et ne peuvent jamais être réglés avec eux. Les points utilisés sont débités atomiquement avec la commande. Les points gagnés ne sont crédités qu’après validation manuelle du paiement par le vendeur (`PAYÉ`), avec une clé de transaction unique empêchant le double crédit. Une annulation recrédite les points utilisés et annule les points gagnés si nécessaire. Le produit `Test` et `MPD226` n’ont aucun effet sur la fidélité.
+
+## Comptes Google et espace client
+
+Le Shop utilise Google Identity Services en mode authentification OpenID Connect. Le frontend reçoit un ID token Google, mais le Worker valide côté serveur sa signature, son issuer, son audience, son expiration, son `sub`, son e-mail vérifié et le nonce de connexion. Le champ stable `sub` est enregistré dans `users.google_sub`, jamais l’adresse e-mail seule.
+
+La configuration publique se trouve dans `config/shop-config.js` :
+
+```js
+googleAuth: { enabled: true, clientId: 'CLIENT_ID_PUBLIC_GOOGLE' }
+```
+
+Il faut remplacer uniquement `clientId` par le Client ID public créé dans Google Cloud. Aucun secret Google n’est nécessaire pour ce flux GIS ; aucun secret Google ne doit être ajouté au frontend, à `wrangler.toml` ou à Git. Les permissions demandées restent limitées à `openid`, `email` et `profile` : aucune permission Gmail, Drive, Contacts ou autre n’est utilisée. Voir la [documentation officielle Sign in with Google](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid) pour la création du Client ID.
+
+Après validation, le Worker crée une session D1 opaque dans un cookie `HttpOnly`, `Secure`, `SameSite=None`, valable 30 jours. Le token Google n’est jamais conservé dans `localStorage`. Un token CSRF temporaire reste uniquement en mémoire JavaScript pour les requêtes qui modifient l’état. Les routes `/api/account` ne renvoient que les commandes, tickets et transactions dont `user_id` correspond à la session courante. Les commandes et tickets invités continuent d’utiliser le parcours existant avec clé privée.
+
+### Préparer Google Cloud
+
+1. Créer ou sélectionner un projet Google Cloud.
+2. Configurer l’écran de consentement OAuth avec les informations publiques du site.
+3. Créer un identifiant client OAuth de type **Application Web**.
+4. Ajouter `https://djcreeper.pages.dev` dans **Authorized JavaScript origins**.
+5. Avec le bouton GIS ID token utilisé ici, aucune URL de redirection n’est nécessaire. Si Google Cloud en demande une pour une autre variante ultérieure, ne pas la déduire : elle devra correspondre exactement au flux choisi.
+6. Ne créer aucune permission Gmail, Drive, Contacts ou autre.
+7. Copier le Client ID public dans `config/shop-config.js`, puis redéployer Pages.
+
+Le Worker doit conserver `PUBLIC_ORIGIN` égal à l’origine Pages exacte. `ADMIN_ORIGINS` autorise explicitement les origines locales `http://127.0.0.1:8090` et `http://localhost:8090` utilisées par le panel vendeur privé. Cette autorisation CORS ne donne aucun accès aux tickets : les routes `/api/admin/*` restent obligatoirement protégées par Cloudflare Access. Les cookies inter-origines nécessitent `credentials: include`, CORS avec credentials et une origine explicite ; aucun wildcard `*` n’est accepté avec la session.
 
 ## Promo de test
 
@@ -139,8 +175,7 @@ Resend demande une clé API, un expéditeur provenant d’un domaine vérifié e
 Le backend n’est pas déployé dans ce dépôt. Pour le préparer :
 
 1. Installer les dépendances dans `worker/` (`npm install`).
-2. Créer une base D1 puis exécuter `worker/schema.sql` avec Wrangler.
-   Si la base avait déjà reçu l’ancien schéma, exécuter une seule fois `worker/migrations/0002_order_status.sql` avant de déployer le Worker mis à jour.
+2. Pour une base vide, exécuter `worker/schema.sql` avec Wrangler. Pour la base de production existante, ne pas rejouer le schéma complet : exécuter `worker/migrations/0003_accounts_loyalty.sql` après la migration historique `0002_order_status.sql` si celle-ci n’a pas déjà été appliquée.
 3. Créer un bucket R2 privé pour `PAYMENT_PROOFS`.
 4. Créer un namespace KV pour `RATE_LIMIT_KV`.
 5. Les bindings de production sont déjà renseignés dans `worker/wrangler.toml`. Vérifier qu’ils correspondent bien aux ressources du compte avant la première exécution distante.
@@ -155,8 +190,9 @@ Commandes recommandées depuis le dossier `worker/` :
 ```text
 npm install
 npx wrangler d1 execute djcreeper-shop --remote --file=schema.sql --config=wrangler.toml
-# seulement pour une base déjà initialisée avant l’ajout du suivi de commande :
+# seulement si la base historique n’a pas encore reçu le suivi de commande :
 npx wrangler d1 execute djcreeper-shop --remote --file=migrations/0002_order_status.sql --config=wrangler.toml
+npx wrangler d1 execute djcreeper-shop --remote --file=migrations/0003_accounts_loyalty.sql --config=wrangler.toml
 npx wrangler r2 bucket list
 npx wrangler kv namespace list
 npx wrangler secret put EMAIL_API_KEY
@@ -173,6 +209,6 @@ Les identifiants D1, R2, KV et les secrets ne sont pas fournis dans Git. Tant qu
 
 Modifiés : `events.html`, `index.html`, `shop.html`, `js/shop.js`, `css/shop.css`, `config/shop-config.js`, `worker/src/index.js`, `worker/schema.sql`, `worker/wrangler.toml`, `README.md`.
 
-Ajoutés dans le dépôt du site : `worker/src/mondial-relay-adapter.js`, `worker/src/worker-config.js`, `worker/src/email-adapter.js`, `worker/migrations/0002_order_status.sql`, `worker/package.json`.
+Ajoutés dans le dépôt du site : `worker/src/mondial-relay-adapter.js`, `worker/src/worker-config.js`, `worker/src/email-adapter.js`, `worker/migrations/0002_order_status.sql`, `worker/migrations/0003_accounts_loyalty.sql`, `worker/package.json`.
 
 Ajoutés hors dépôt GitHub, dans `C:\Users\DJCre\Documents\code\DJCreeper Admin Panel` : `admin.html`, `admin.js`, `admin.css`, `admin-config.js`, `README.md`.
