@@ -632,12 +632,8 @@ async function configureGoogleButton() {
       target.replaceChildren()
       globalThis.google.accounts.id.renderButton(target, { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'pill', logo_alignment: 'left' })
     }
-    const fallback = $('#google-signin-fallback')
-    if (fallback) fallback.hidden = true
     setMessage(feedback, '')
   } catch (error) {
-    const fallback = $('#google-signin-fallback')
-    if (fallback) fallback.hidden = false
     setMessage(feedback, error instanceof Error ? error.message : 'Connexion Google indisponible.', 'error')
   }
 }
@@ -1066,7 +1062,6 @@ function bindEvents() {
   $('#open-account')?.addEventListener('click', openAccountPanel)
   $('#close-account')?.addEventListener('click', () => { $('#account-panel').hidden = true })
   $('#logout-account')?.addEventListener('click', logoutAccount)
-  $('#google-signin-fallback')?.addEventListener('click', configureGoogleButton)
   $('#copy-ticket-access')?.addEventListener('click', async event => {
     const token = $('#ticket-access-token')?.textContent || ''
     try {
